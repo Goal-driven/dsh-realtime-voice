@@ -7,6 +7,7 @@ import type { ToolCall } from './protocol.ts'
 import { QwenPipelineConnection } from './qwen-pipeline.ts'
 import { TurnCoordinator, type TurnPhase } from './turn-coordinator.ts'
 import { VoiceSummaryStream } from './voice-summary.ts'
+import { localizeVoiceError } from './voice-errors.ts'
 
 export type VoiceState = 'idle' | 'connecting' | 'listening' | 'speaking' | 'working' | 'error'
 export interface VoiceSnapshot { state: VoiceState; detail: string; provider: 'qwen' | 'openai' }
@@ -157,7 +158,7 @@ export class VoiceController {
       connection.disconnect()
       if (this.connectionEpoch !== epoch || this.connection !== connection) return
       this.connection = undefined
-      this.setState('error', error instanceof Error ? error.message : String(error))
+      this.setState('error', localizeVoiceError(error instanceof Error ? error.message : String(error)))
     }
   }
 
