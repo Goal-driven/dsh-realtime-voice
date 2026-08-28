@@ -25,7 +25,7 @@ const base: VoicePrefs = {
   openaiFloorModel: 'gpt-5-mini',
   voiceprintEnabled: false,
   voiceprintThreshold: 75,
-  openaiModel: 'gpt-realtime-2.1',
+  openaiModel: 'gpt-realtime-2.1-mini',
   openaiVoice: 'marin',
   instructions: 'test',
 }
@@ -43,10 +43,15 @@ test('OpenAI forces the only Harness tool instead of relying on model choice', (
 })
 
 test('both providers receive the Harness-first policy', () => {
-  const openai = sessionUpdate(base) as { session: { instructions: string } }
+  const openai = sessionUpdate(base) as { session: { instructions: string; truncation: unknown } }
   const qwen = sessionUpdate({ ...base, provider: 'qwen' }) as { session: { instructions: string; input_audio_transcription: { model: string; language: string } } }
-  assert.match(openai.session.instructions, /每一次有效发言/)
-  assert.match(qwen.session.instructions, /唯一允许的处理方式都是调用 delegate_to_harness/)
+  assert.match(openai.session.instructions, /varje giltigt yttrande/i)
+  assert.match(qwen.session.instructions, /delegate_to_harness/)
+  assert.deepEqual(openai.session.truncation, {
+    type: 'retention_ratio',
+    retention_ratio: 0.8,
+    token_limits: { post_instructions: 96_000 },
+  })
   assert.deepEqual(qwen.session.input_audio_transcription, { model: 'qwen3-asr-flash-realtime', language: 'zh' })
 })
 
@@ -70,5 +75,5 @@ test('tool output always creates output then explicitly resumes response', () =>
 
 test('tool output turns Harness failures into speakable text', () => {
   const events = toolOutput('call-1', { ok: false, error: 'offline' })
-  assert.equal((events[0]?.item as { output?: string }).output, 'Harness 执行失败：offline')
+  assert.equal((events[0]?.item as { output?: string }).output, 'Harness kunde inte slutföra uppgiften: offline')
 })

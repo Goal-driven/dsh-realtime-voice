@@ -1,5 +1,6 @@
 import type { VoicePrefs } from './prefs.ts';
 import { type ToolCall } from './protocol.ts';
+import { type VoiceTelemetrySnapshot } from './telemetry.ts';
 export interface TranscriptMeta {
     capturedWhileBusy?: boolean;
     voiceprint?: 'approved' | 'rejected' | 'unavailable';
@@ -10,6 +11,7 @@ export interface RealtimeCallbacks {
     onSpeechStart?(): void;
     onSpeechEnd?(): void;
     onTranscript?(text: string, meta?: TranscriptMeta): Promise<void>;
+    onTelemetry?(snapshot: VoiceTelemetrySnapshot): void;
 }
 export declare class RealtimeConnection {
     private readonly prefs;
@@ -25,10 +27,12 @@ export declare class RealtimeConnection {
     private sessionCreated;
     private updateSent;
     private responseActive;
+    private readonly telemetry;
     constructor(prefs: VoicePrefs, callbacks: RealtimeCallbacks);
     connect(): Promise<void>;
     disconnect(): void;
     private handleEvent;
     private send;
     private maybeSendSessionUpdate;
+    private publishTelemetry;
 }

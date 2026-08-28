@@ -31,7 +31,7 @@ export interface VoicePrefs {
 const KEY = 'dsh-realtime-voice:prefs:v1'
 const PREFS_URL = '/dsh-realtime-voice/prefs'
 const DEFAULTS: VoicePrefs = {
-  provider: 'qwen',
+  provider: 'openai',
   qwenWorkspaceId: '',
   qwenRegion: 'cn-beijing',
   qwenModel: 'qwen3.5-omni-plus-realtime',
@@ -52,9 +52,9 @@ const DEFAULTS: VoicePrefs = {
   openaiFloorModel: 'gpt-5-mini',
   voiceprintEnabled: false,
   voiceprintThreshold: 75,
-  openaiModel: 'gpt-realtime-2.1',
+  openaiModel: 'gpt-realtime-2.1-mini',
   openaiVoice: 'marin',
-  instructions: '请用自然、简洁、适合口语播报的中文表达，并允许用户随时打断。',
+  instructions: 'Tala naturlig, tydlig och kortfattad svenska (sv-SE). Använd en varm samtalston och låt användaren avbryta när som helst.',
 }
 
 let cache: VoicePrefs | undefined
@@ -94,7 +94,7 @@ export function persistPrefs(prefs: VoicePrefs): void {
 }
 
 function hasCustomPrefs(prefs: VoicePrefs): boolean {
-  return prefs.provider !== 'qwen'
+  return prefs.provider !== DEFAULTS.provider
     || prefs.qwenWorkspaceId !== ''
     || prefs.qwenModel !== DEFAULTS.qwenModel
     || prefs.qwenVoice !== DEFAULTS.qwenVoice
@@ -171,7 +171,7 @@ function sanitize(value: VoicePrefs): VoicePrefs {
     openaiFloorModel: text(value.openaiFloorModel, 128) || DEFAULTS.openaiFloorModel,
     voiceprintEnabled: value.voiceprintEnabled === true,
     voiceprintThreshold: numberInRange(value.voiceprintThreshold, 0, 100, DEFAULTS.voiceprintThreshold),
-    openaiModel: text(value.openaiModel, 128) || DEFAULTS.openaiModel,
+    openaiModel: value.openaiModel === 'gpt-realtime-2.1-mini' ? value.openaiModel : DEFAULTS.openaiModel,
     openaiVoice: text(value.openaiVoice, 128) || DEFAULTS.openaiVoice,
     instructions: text(value.instructions, 12_000) || DEFAULTS.instructions,
   }

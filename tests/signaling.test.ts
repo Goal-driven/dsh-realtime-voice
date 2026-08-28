@@ -22,6 +22,8 @@ test('rejects endpoint injection and oversized provider fields', () => {
   assert.throws(() => parseSignalRequest({ sdp: 'v=0\nlong-enough', workspaceId: 'bad.example.com/' }, 'qwen'), HttpError)
   assert.throws(() => parseSignalRequest({ sdp: 'v=0\nlong-enough', workspaceId: 'valid_id', region: 'evil' }, 'qwen'), HttpError)
   assert.throws(() => parseSignalRequest({ sdp: 'v=0\nlong-enough', model: 'x'.repeat(129) }, 'openai'), HttpError)
+  assert.throws(() => parseSignalRequest({ sdp: 'v=0\nlong-enough', model: 'gpt-realtime-2.1' }, 'openai'), HttpError)
+  assert.equal(parseSignalRequest({ sdp: 'v=0\nlong-enough', model: 'gpt-realtime-2.1-mini' }, 'openai').model, 'gpt-realtime-2.1-mini')
 })
 
 test('normalizeSdp is idempotent', () => {

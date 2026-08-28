@@ -19,3 +19,5 @@ Include the affected version, provider, reproduction steps, impact, and a minima
 - Voiceprint is an interference-reduction signal, not authentication or authorization. A rejection or provider failure prevents automatic submission but preserves the transcript for deliberate manual sending. High-risk actions still require Harness policy and user confirmation.
 - AI dynamic floor speech sends only a Host-sanitized topic of at most 18 characters, a closed stage enum, and up to three prior validated cues to the selected voice provider. It never sends the original prompt, Harness reasoning, tool payloads, or credentials through the composer route.
 - The plugin does not bypass provider geography, account policy, or user consent requirements.
+- OpenAI signaling accepts only the allowlisted `gpt-realtime-2.1-mini` model. Usage telemetry contains counts, latency, model id, and estimated USD only; it does not include transcripts, audio, prompts, credentials, or tool payloads.
+- The cost estimate is computed in the browser from the provider's `response.done.usage` object and is not authoritative billing data. Provider usage and cost reports remain the source of truth.

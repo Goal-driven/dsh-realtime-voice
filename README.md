@@ -1,5 +1,17 @@
 # dsh-realtime-voice
 
+## ValueHub-konfiguration (sv-SE)
+
+ValueHub-versionen använder OpenAI `gpt-realtime-2.1-mini` som standard med naturlig svenska (`sv-SE`) och rösten `marin`. Modellen är låst på både klient och Host. Varje giltigt yttrande delegeras fortfarande till Harness; röstmodellen får inte svara eller köra andra verktyg själv.
+
+Pluginen publicerar följande telemetri till GenUI Canvas efter varje svar:
+
+- cacheträff för indata;
+- tid från avslutat tal till första ljuddelta;
+- kostnad per svar och ackumulerad sessionskostnad.
+
+Kostnaden räknas från OpenAI-eventets faktiska text-/ljudtokens med separata priser för cacheade tokens. Realtime-sessionen använder `retention_ratio: 0.8`, vilket minskar hur ofta en lång konversation måste kapa sin prefixcache. Siffran i Canvas är en löpande uppskattning; OpenAI Usage/Costs är fakturaunderlaget.
+
 DeepSeek Harness 的轻量实时语音插件。不包含 Docker、Python或本地模型。千问线路是确定性的三段式管线：浏览器采集 PCM，Harness Host 以同源 WebSocket 代理专用 ASR/TTS；空闲时完整语句经原生输入框自动交给当前 Harness 会话，忙时的新语音先合并到输入框，播报结束后按可配置停留时间安全续发，语音厂商没有独立回答的机会。
 
 ![DeepSeek Harness 实时语音插件设置](https://raw.githubusercontent.com/zfu691531-hash/dsh-realtime-voice/main/screenshots/settings.png)
@@ -7,7 +19,7 @@ DeepSeek Harness 的轻量实时语音插件。不包含 Docker、Python或本�
 ## 能力
 
 - 国内线路：`qwen3-asr-flash-realtime → DeepSeek Harness → qwen3-tts-flash-realtime`（阿里云百炼，北京/新加坡）。
-- 全球线路：`gpt-realtime-2.1`（OpenAI Realtime）。
+- 全球线路：`gpt-realtime-2.1-mini`（OpenAI Realtime，ValueHub 默认）。
 - 千问使用两个独立语音模型：ASR 只转写，TTS 只播报；不再使用 Omni Realtime 作为对话模型。
 - ASR final 统一经过原生输入框：空闲且输入框为空时，在续说窗口结束后自动调用原生发送；Harness 推理或播报期间捕获的后续语音先取得一个仅限 ASR 草稿的发送租约，全部播报结束后再等待默认 `1800ms`，期间没有续说或键盘编辑才提交完整草稿。推理、记忆、联网、插件与工具调度全部由 Harness 完成。
 - VAD 默认 `threshold=0.85`、尾静音 `700ms`，并关闭浏览器自动增益以优先近讲。ASR final 先进入候选断句，再等待 `1200ms` 的续说窗口；从停顿开始约 `1.9s` 才提交 Harness，期间继续说话仍属于同一轮。
@@ -86,7 +98,7 @@ await fetch('/dsh-realtime-voice/status').then(response => response.json())
 - OpenAI：`OPENAI_API_KEY`。
 - 可选声纹：`TENCENT_SECRET_ID` 与 `TENCENT_SECRET_KEY`。声纹音频会按用户显式启用发送到腾讯云说话人验证服务；插件只持久化腾讯云返回的不透明 VoicePrintId，不持久化录音或声纹特征。
 
-插件设置只保存 provider、Workspace ID、ASR/TTS 模型、TTS 音色、VAD/语段合并/草稿停留参数、声纹开关/阈值和播报风格；不保存 Key。声纹 ID 只存 Host 设置且不会返回浏览器，原始 PCM 仅在当前 utterance 的内存中短暂存在。千问默认使用北京区、`qwen3-asr-flash-realtime`、`qwen3-tts-flash-realtime` 和 `Chelsie`；OpenAI 默认使用 `gpt-realtime-2.1` 和 `marin`。`Tina` 是 Omni 专属音色，独立 TTS 不支持；`Chelsie` 是专用 TTS 中更接近其软糯亲昵风格的选择。
+插件设置只保存 provider、Workspace ID、ASR/TTS 模型、TTS 音色、VAD/语段合并/草稿停留参数、声纹开关/阈值和播报风格；不保存 Key。声纹 ID 只存 Host 设置且不会返回浏览器，原始 PCM 仅在当前 utterance 的内存中短暂存在。千问使用北京区、`qwen3-asr-flash-realtime`、`qwen3-tts-flash-realtime` 和 `Chelsie`；OpenAI 默认使用 `gpt-realtime-2.1-mini` 和 `marin`。`Tina` 是 Omni 专属音色，独立 TTS 不支持；`Chelsie` 是专用 TTS 中更接近其软糯亲昵风格的选择。
 
 ## 桌面版 rc.5 的麦克风限制
 
@@ -97,8 +109,7 @@ await fetch('/dsh-realtime-voice/status').then(response => response.json())
 ## 开发与验收
 
 ```bash
-npm install --ignore-scripts
-npm run dev:link-dsh
+npm install --ignore-scripts --legacy-peer-deps
 npm run check
 ```
 
