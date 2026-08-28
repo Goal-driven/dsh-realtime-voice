@@ -19,6 +19,13 @@ test('a simple one-paragraph answer is flushed at turn completion', () => {
   assert.deepEqual(spoken, ['可以，已经处理好了'])
 })
 
+test('a Swedish full stop streams speech before turn completion', () => {
+  const spoken: string[] = []
+  const stream = new VoiceSummaryStream(sentence => spoken.push(sentence))
+  stream.push('Ja, jag hör dig nu.')
+  assert.deepEqual(spoken, ['Ja, jag hör dig nu.'])
+})
+
 test('leading blank lines do not consume the first natural paragraph', () => {
   const spoken: string[] = []
   const stream = new VoiceSummaryStream(sentence => spoken.push(sentence))

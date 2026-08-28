@@ -38,8 +38,9 @@ test('OpenAI and Qwen expose only the mandatory Harness delegate', () => {
 })
 
 test('OpenAI forces the only Harness tool instead of relying on model choice', () => {
-  const openai = sessionUpdate(base) as { session: { tool_choice: string } }
+  const openai = sessionUpdate(base) as { session: { tool_choice: string; audio: { input: { turn_detection: { eagerness: string } } } } }
   assert.equal(openai.session.tool_choice, 'required')
+  assert.equal(openai.session.audio.input.turn_detection.eagerness, 'high')
 })
 
 test('both providers receive the Harness-first policy', () => {
@@ -82,4 +83,10 @@ test('tool output resumes with audio and disables the mandatory tool for the spo
 test('tool output turns Harness failures into speakable text', () => {
   const events = toolOutput('call-1', { ok: false, error: 'offline' })
   assert.equal((events[0]?.item as { output?: string }).output, 'Harness kunde inte slutföra uppgiften: offline')
+})
+
+test('a result already streamed as speech closes the tool call without speaking twice', () => {
+  const events = toolOutput('call-1', { ok: true, text: 'Redan uppläst.', voiceAlreadySpoken: true })
+  assert.equal(events.length, 1)
+  assert.equal((events[0]?.item as { output?: string }).output, 'Redan uppläst.')
 })

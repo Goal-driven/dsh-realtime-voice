@@ -1,5 +1,5 @@
 import { HarnessBridge, type DelegateResult, type TextResetReason } from './harness-delegate.ts'
-import { FloorManager } from './floor-manager.ts'
+import { FloorManager, type FloorStage } from './floor-manager.ts'
 import { resolveDynamicFloorCue } from './floor-composer.ts'
 import { loadPrefs, type VoicePrefs } from './prefs.ts'
 import { RealtimeConnection, type RealtimeCallbacks, type TranscriptMeta } from './realtime.ts'
@@ -232,10 +232,74 @@ export class VoiceController {
     this.setState('working', task.slice(0, 100))
     const taskAbort = new AbortController()
     this.taskAbort = taskAbort
-    const result = await this.bridge.delegate(this.sessionId, task, taskAbort.signal)
-    if (this.taskAbort === taskAbort) this.taskAbort = undefined
-    if (this.connection === source) this.setState('listening', result.ok ? 'Harness är klar' : result.error)
-    return result
+    let speechQueue = Promise.resolve()
+    let speechGeneration = 0
+    let speechError: unknown
+    let answerSpeechCompleted = false
+    let visibleTextSeen = false
+    const enqueueSpeech = (text: string, answer: boolean) => {
+      if (source.speak === undefined) return
+      const generation = speechGeneration
+      speechQueue = speechQueue.then(async () => {
+        if (generation !== speechGeneration || this.connection !== source) return
+        await source.speak?.(text)
+        if (answer) answerSpeechCompleted = true
+      }).catch(error => {
+        if (generation === speechGeneration) speechError = error
+      })
+    }
+    let summary = new VoiceSummaryStream(text => enqueueSpeech(text, true))
+    const prefs = loadPrefs()
+    const floor = new FloorManager(prefs.floorDelayMs, text => enqueueSpeech(text, false), {
+      resolveCue: request => Promise.resolve(swedishFloorCue(request.stage)),
+    })
+    floor.start(task)
+    let result: DelegateResult
+    try {
+      result = await this.bridge.delegate(this.sessionId, task, taskAbort.signal, {
+        voiceOutputContract: true,
+        onTextDelta: delta => {
+          if (!visibleTextSeen) {
+            visibleTextSeen = true
+            floor.resultAvailable()
+          }
+          summary.push(delta)
+        },
+        onTextReset: reason => {
+          if (visibleTextSeen) {
+            speechGeneration++
+            source.cancelSpeech?.()
+            speechQueue = Promise.resolve()
+            speechError = undefined
+            answerSpeechCompleted = false
+          }
+          visibleTextSeen = false
+          summary = new VoiceSummaryStream(text => enqueueSpeech(text, true))
+          floor.reset(reason)
+        },
+      })
+    } catch (error) {
+      result = { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      floor.dispose()
+      if (this.taskAbort === taskAbort) this.taskAbort = undefined
+    }
+    if (this.connection !== source) return result
+    if (!result.ok) {
+      speechGeneration++
+      source.cancelSpeech?.()
+      this.setState('listening', result.error)
+      return result
+    }
+    summary.finish(result.text)
+    await speechQueue
+    await source.waitForSpeechIdle?.()
+    this.setState('listening', answerSpeechCompleted || speechError === undefined
+      ? 'Harness är klar'
+      : 'Harness är klar; separat uppläsning misslyckades')
+    return answerSpeechCompleted
+      ? { ...result, voiceAlreadySpoken: true }
+      : result
   }
 
   private async handleTranscript(source: VoiceConnection, transcript: string): Promise<void> {
@@ -824,6 +888,13 @@ function isSensitiveDraft(text: string): boolean {
 function joinDraft(existing: string, addition: string): string {
   const before = existing.trimEnd()
   return before === '' ? addition : `${before}\n${addition}`
+}
+
+function swedishFloorCue(stage: FloorStage): string {
+  if (stage === 'tool') return 'Jag kontrollerar nästa steg.'
+  if (stage === 'retry') return 'Jag försöker igen.'
+  if (stage === 'long-wait') return 'Det tar lite längre tid än vanligt, men jag arbetar fortfarande.'
+  return 'Jag arbetar på det.'
 }
 
 function delay(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)) }
