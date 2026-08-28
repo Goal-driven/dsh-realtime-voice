@@ -113,7 +113,13 @@ export function toolOutput(callId: string, output: unknown): Array<Record<string
   return [{
     type: 'conversation.item.create',
     item: { type: 'function_call_output', call_id: callId, output: spoken },
-  }, { type: 'response.create' }]
+  }, {
+    type: 'response.create',
+    response: {
+      output_modalities: ['audio'],
+      tool_choice: 'none',
+    },
+  }]
 }
 
 function normalizeHarnessOutput(output: unknown): string {

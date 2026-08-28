@@ -66,11 +66,17 @@ test('parses function calls from both supported event envelopes', () => {
   })
 })
 
-test('tool output always creates output then explicitly resumes response', () => {
+test('tool output resumes with audio and disables the mandatory tool for the spoken answer', () => {
   const events = toolOutput('call-1', { ok: true, text: 'done' })
   assert.equal(events[0]?.type, 'conversation.item.create')
   assert.equal((events[0]?.item as { output?: string }).output, 'done')
-  assert.equal(events[1]?.type, 'response.create')
+  assert.deepEqual(events[1], {
+    type: 'response.create',
+    response: {
+      output_modalities: ['audio'],
+      tool_choice: 'none',
+    },
+  })
 })
 
 test('tool output turns Harness failures into speakable text', () => {
