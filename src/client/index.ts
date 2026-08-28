@@ -3,6 +3,7 @@ import { HarnessBridge } from './harness-delegate.ts'
 import { VoiceController } from './controller.ts'
 import { MicButton, SettingsCard, VoiceStatus } from './components.tsx'
 import { hydrateFromHost } from './prefs.ts'
+import { voiceSettingsSlotRegistration } from './settings-slot.ts'
 
 export const name = 'dsh-realtime-voice-client'
 export const inject = ['slots', 'connection']
@@ -45,9 +46,7 @@ export function apply(ctx: Context): void {
   }, VoiceStatus)), 'dsh-realtime-voice: status dock')
 
   ctx.effect(() => ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
-    name: 'settings.plugin.item',
-    id: 'realtime-voice-settings',
-    order: 25,
+    ...voiceSettingsSlotRegistration(),
     inject: () => ({}),
   }, SettingsCard)), 'dsh-realtime-voice: settings')
 }
