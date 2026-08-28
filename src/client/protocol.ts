@@ -1,10 +1,10 @@
 import type { VoicePrefs } from './prefs.ts'
 
 export const HARNESS_FIRST_POLICY = `
-你是 DeepSeek Harness 的实时语音输入输出层，不是独立回答问题的助手。
-对用户的每一次有效发言，无论是闲聊、知识问答、天气查询、电脑操作还是多步骤任务，你的第一步且唯一允许的处理方式都是调用 delegate_to_harness。
-调用时必须把用户原意完整、忠实地写入 task；不得自行回答、搜索、推理、执行工具或省略用户要求。
-收到 delegate_to_harness 的结果后，只朗读工具输出中的自然语言内容，不补充、不改写、不总结，也不要再次调用工具。
+Du är DeepSeek Harness lager för realtime-röst, inte en fristående assistent.
+För varje giltigt yttrande från användaren – samtal, frågor, sökning, datoråtgärder eller flerstegsarbete – måste ditt första och enda steg vara att anropa delegate_to_harness.
+Återge användarens fullständiga avsikt troget i task. Svara, sök, resonera eller kör inga andra verktyg själv och utelämna inga krav.
+När delegate_to_harness returnerar ska du endast läsa upp verktygets naturliga språk. Lägg inte till, skriv inte om, sammanfatta inte och anropa inget nytt verktyg.
 `.trim()
 
 export interface ToolCall {
@@ -16,10 +16,10 @@ export interface ToolCall {
 export function sessionUpdate(prefs: VoicePrefs): Record<string, unknown> {
   const functions = [{
     name: 'delegate_to_harness',
-    description: '必须对用户每一次有效发言调用。把完整原意交给当前 DeepSeek Harness 会话，由 Harness 统一完成推理、记忆、搜索、插件和工具调度。',
+    description: 'Måste anropas för varje giltigt yttrande. Överlämna användarens fullständiga avsikt till aktuell DeepSeek Harness-session för resonemang, minne, sökning, plugins och verktyg.',
     parameters: {
       type: 'object',
-      properties: { task: { type: 'string', description: '完整、忠实、可执行的用户原意；不要自行回答或删改' } },
+      properties: { task: { type: 'string', description: 'Användarens fullständiga, trogna och körbara avsikt. Svara inte själv och ändra inget.' } },
       required: ['task'],
       additionalProperties: false,
     },
@@ -34,6 +34,11 @@ export function sessionUpdate(prefs: VoicePrefs): Record<string, unknown> {
         type: 'realtime',
         instructions,
         output_modalities: ['audio'],
+        truncation: {
+          type: 'retention_ratio',
+          retention_ratio: 0.8,
+          token_limits: { post_instructions: 96_000 },
+        },
         audio: {
           input: {
             turn_detection: {
@@ -115,8 +120,8 @@ function normalizeHarnessOutput(output: unknown): string {
   if (typeof output === 'object' && output !== null) {
     const result = output as { ok?: unknown; text?: unknown; error?: unknown; cancelled?: unknown }
     if (result.ok === true && typeof result.text === 'string' && result.text.trim() !== '') return result.text
-    if (result.cancelled === true) return '任务已取消。'
-    if (typeof result.error === 'string' && result.error.trim() !== '') return `Harness 执行失败：${result.error}`
+    if (result.cancelled === true) return 'Uppgiften avbröts.'
+    if (typeof result.error === 'string' && result.error.trim() !== '') return `Harness kunde inte slutföra uppgiften: ${result.error}`
   }
   return typeof output === 'string' ? output : JSON.stringify(output)
 }

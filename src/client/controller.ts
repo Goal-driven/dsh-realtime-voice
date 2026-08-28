@@ -101,12 +101,12 @@ export class VoiceController {
     // boundDraft is our own expected write; a mismatch is a real user edit,
     // paste or clear and revokes the ASR-owned auto-send lease.
     if (current !== this.boundDraft) {
-      this.disarmDraftAutoSend('输入框已由你修改；自动发送已取消')
+      this.disarmDraftAutoSend('Du ändrade utkastet; automatisk sändning avbröts')
       this.boundDraft = current
       this.boundDraftRev = currentRev
       this.pluginDraftWritePending = false
     } else if (currentRev !== undefined && this.boundDraftRev !== undefined && currentRev !== this.boundDraftRev) {
-      if (!this.pluginDraftWritePending) this.disarmDraftAutoSend('输入框已由你修改；自动发送已取消')
+      if (!this.pluginDraftWritePending) this.disarmDraftAutoSend('Du ändrade utkastet; automatisk sändning avbröts')
       this.boundDraftRev = currentRev
       this.pluginDraftWritePending = false
       if (this.draftAutoSendLease !== undefined) this.draftAutoSendLease.expectedDraftRev = currentRev
@@ -124,7 +124,7 @@ export class VoiceController {
   async toggle(): Promise<void> {
     if (this.connection !== undefined) return this.stop()
     if (new URLSearchParams(location.search).has('dsh-desktop-platform')) {
-      this.setState('error', '桌面壳暂不开放麦克风；正在用默认浏览器打开同一会话')
+      this.setState('error', 'Skrivbordsappen saknar mikrofonåtkomst; samma session öppnas i standardwebbläsaren')
       window.open(location.href.replace(/([?&])dsh-desktop-platform=[^&]*&?/, '$1').replace(/[?&]$/, ''), '_blank', 'noopener')
       return
     }
@@ -211,14 +211,14 @@ export class VoiceController {
   }
 
   private async handleToolCall(source: VoiceConnection, call: ToolCall): Promise<unknown> {
-    if (this.connection !== source) return { ok: false, error: '语音连接已关闭' }
+    if (this.connection !== source) return { ok: false, error: 'Röstanslutningen är stängd' }
     if (call.name === 'cancel_harness_task') {
       this.disarmDraftAutoSend()
       this.taskAbort?.abort()
       const cancelled = await this.bridge.cancel(this.sessionId)
       if (this.connection === source) {
         this.invalidateCurrentTurn(source)
-        this.setState('listening', cancelled ? 'Harness 任务已取消' : '没有正在执行的 Harness 任务')
+        this.setState('listening', cancelled ? 'Harness-uppgiften avbröts' : 'Ingen Harness-uppgift körs')
       }
       return { ok: true, cancelled }
     }
@@ -227,13 +227,13 @@ export class VoiceController {
       const args = JSON.parse(call.arguments) as { task?: unknown }
       if (typeof args.task === 'string') task = args.task.trim()
     } catch { /* validated below */ }
-    if (task === '') return { ok: false, error: 'delegate_to_harness 缺少 task' }
+    if (task === '') return { ok: false, error: 'delegate_to_harness saknar task' }
     this.setState('working', task.slice(0, 100))
     const taskAbort = new AbortController()
     this.taskAbort = taskAbort
     const result = await this.bridge.delegate(this.sessionId, task, taskAbort.signal)
     if (this.taskAbort === taskAbort) this.taskAbort = undefined
-    if (this.connection === source) this.setState('listening', result.ok ? 'Harness 已完成' : result.error)
+    if (this.connection === source) this.setState('listening', result.ok ? 'Harness är klar' : result.error)
     return result
   }
 
@@ -254,11 +254,11 @@ export class VoiceController {
         if (this.taskAbort === active) this.taskAbort = undefined
         if (this.connection === source) {
           this.invalidateCurrentTurn(source)
-          this.setState('listening', cancelled ? 'Harness 任务已取消' : '没有正在执行的 Harness 任务')
+          this.setState('listening', cancelled ? 'Harness-uppgiften avbröts' : 'Ingen Harness-uppgift körs')
         }
       } else {
         this.appendToDraft(task)
-        this.setState('working', '继续任务：新语音已转成文字；发送后排队处理，也可以直接清空')
+        this.setState('working', 'Fortsatt uppgift: Nytt tal har lagts i utkastet; skicka för att köa eller rensa')
       }
       return
     }
@@ -267,7 +267,7 @@ export class VoiceController {
     // final must not preempt the answer that is about to play.
     if (this.turns.phase === 'tts-pending' || this.turns.phase === 'tts-speaking' || this.turns.phase === 'post-playback') {
       this.appendToDraft(task)
-      this.setState(this.turns.phase === 'tts-speaking' ? 'speaking' : 'working', '继续任务：新语音已保留在输入框；发送后处理，或直接清空')
+      this.setState(this.turns.phase === 'tts-speaking' ? 'speaking' : 'working', 'Fortsatt uppgift: Nytt tal ligger i utkastet; skicka eller rensa')
       return
     }
     const turnId = this.turns.begin()
@@ -293,7 +293,7 @@ export class VoiceController {
     }
     this.appendToDraft(task)
     const playback = this.turns.phase === 'tts-speaking' || this.turns.phase === 'post-playback'
-    this.setState(playback ? 'speaking' : this.taskAbort !== undefined ? 'working' : 'listening', '继续任务：新语音已保留在输入框；发送后处理，或直接清空')
+    this.setState(playback ? 'speaking' : this.taskAbort !== undefined ? 'working' : 'listening', 'Fortsatt uppgift: Nytt tal ligger i utkastet; skicka eller rensa')
   }
 
   private stageComposerTranscript(source: VoiceConnection, transcript: string, meta: TranscriptMeta = {}): void {
@@ -323,7 +323,7 @@ export class VoiceController {
     this.disarmDraftAutoSend()
     this.nativeSubmittedTask = submittedTask
     this.nativeSubmitPending = true
-    this.setState('working', '语音已识别，正在交给 Harness')
+    this.setState('working', 'Talet är identifierat och lämnas till Harness')
     queueMicrotask(() => {
       if (this.connection !== source || !this.nativeSubmitPending) return
       try {
@@ -338,7 +338,7 @@ export class VoiceController {
         this.nativeSubmittedTask = ''
         this.clearNativeSubmitPending()
         if (this.turns.phase === 'endpoint-candidate') this.setTurnPhase(this.turns.turnId, 'listening')
-        this.setState('error', `自动发送失败，文字已保留在输入框：${error instanceof Error ? error.message : String(error)}`)
+        this.setState('error', `Automatisk sändning misslyckades; texten finns kvar i utkastet: ${error instanceof Error ? error.message : String(error)}`)
         return
       }
       if (!this.nativeSubmitPending) return
@@ -348,7 +348,7 @@ export class VoiceController {
         this.nativeSubmitPending = false
         this.nativeSubmittedTask = ''
         if (this.turns.phase === 'endpoint-candidate') this.setTurnPhase(this.turns.turnId, 'listening')
-        this.setState('error', 'Harness 未确认自动发送；请检查输入框后手动发送')
+        this.setState('error', 'Harness bekräftade inte automatisk sändning; kontrollera utkastet och skicka manuellt')
       }, 10_000)
     })
   }
@@ -391,7 +391,7 @@ export class VoiceController {
     this.clearNativeSubmitPending()
     const turnId = this.turns.begin()
     this.setTurnPhase(turnId, 'harness')
-    this.setState('working', '输入已发送，Harness 正在处理')
+    this.setState('working', 'Utkastet har skickats och Harness arbetar')
     const observed = {} as ObservedSpeech
     observed.harnessTurn = harnessTurn
     observed.turnId = turnId
@@ -496,10 +496,10 @@ export class VoiceController {
       }
       this.setTurnPhase(turnId, 'listening')
       this.setState('listening', isBargeInError(observed.speechError)
-        ? '播报已打断；识别文字保留在输入框'
+        ? 'Uppläsningen avbröts; den identifierade texten finns kvar i utkastet'
         : this.hasPendingDraft()
-          ? 'Harness 已完成；输入框里的后续语音正在等待发送'
-          : 'Harness 已完成；继续说将自动处理')
+          ? 'Harness är klar; följdtalet i utkastet väntar på att skickas'
+          : 'Harness är klar; fortsätt tala för automatisk hantering')
       this.scheduleDraftAutoSend()
       release()
     } catch (error) {
@@ -573,7 +573,7 @@ export class VoiceController {
     if (source.speak === undefined) {
       this.disarmDraftAutoSend()
       this.setTurnPhase(turnId, 'listening')
-      this.setState('error', '当前语音连接没有独立 TTS')
+      this.setState('error', 'Den aktuella röstanslutningen saknar separat talsyntes')
       return
     }
     try {
@@ -587,8 +587,8 @@ export class VoiceController {
         if (this.connection !== source || !this.turns.isCurrent(turnId)) return
         this.setTurnPhase(turnId, 'listening')
         this.setState('listening', isBargeInError(speechError)
-          ? '播报已打断；新语音已保留在输入框，可发送或清空'
-          : 'Harness 已完成')
+          ? 'Uppläsningen avbröts; nytt tal finns kvar i utkastet och kan skickas eller rensas'
+          : 'Harness är klar')
         this.scheduleDraftAutoSend()
       }
     } catch (error) {
@@ -708,18 +708,18 @@ export class VoiceController {
       this.draftAutoSendTimer = undefined
       const current = this.validDraftAutoSendLease(generation)
       if (current === undefined) {
-        this.disarmDraftAutoSend('输入框或发送状态已变化；自动发送已取消')
+        this.disarmDraftAutoSend('Utkastet eller sändningsläget ändrades; automatisk sändning avbröts')
         return
       }
       // Server VAD speech_started can trail the actual acoustic onset. Keep a
       // short final guard window so a user beginning the next phrase at the
       // dwell boundary still cancels before submit.
-      this.setState('listening', '后续语音即将发送；继续说仍会合并')
+      this.setState('listening', 'Följdtalet skickas snart; mer tal sammanfogas fortfarande')
       this.draftCommitTimer = setTimeout(() => {
         this.draftCommitTimer = undefined
         const ready = this.validDraftAutoSendLease(generation)
         if (ready === undefined) {
-          this.disarmDraftAutoSend('输入框或发送状态已变化；自动发送已取消')
+          this.disarmDraftAutoSend('Utkastet eller sändningsläget ändrades; automatisk sändning avbröts')
           return
         }
         this.submitBoundDraft(ready.source)
@@ -755,7 +755,7 @@ export class VoiceController {
     const lease = this.draftAutoSendLease
     this.pauseDraftAutoSend()
     if (lease === undefined) return
-    this.setState('listening', '检测到你在继续说；等待本句识别后合并')
+    this.setState('listening', 'Du fortsätter tala; väntar på att sammanfoga meningen')
   }
 
   private handleSpeechEnd(source: VoiceConnection): void {
@@ -800,16 +800,16 @@ export class VoiceController {
     const lease = this.draftAutoSendLease
     if (lease !== undefined && this.isDraftAutoSendSafe(lease)) {
       const seconds = Math.round(loadPrefs().voiceDraftDwellMs / 100) / 10
-      this.setState('listening', `后续语音已合并；继续说会重新计时，约 ${seconds} 秒后自动发送`)
+      this.setState('listening', `Följdtalet är sammanfogat; mer tal startar om timern, automatisk sändning om cirka ${seconds} sekunder`)
       return
     }
-    this.setState('listening', '语音已写入输入框；可继续说、手动发送或清空')
+    this.setState('listening', 'Talet finns i utkastet; fortsätt tala, skicka manuellt eller rensa')
   }
 }
 
 function isExplicitCancel(text: string): boolean {
-  const normalized = text.replace(/[\s，。！？,.!?、]/g, '')
-  return /^(停|停止|停下|别说了|取消|取消任务|不要了|算了)$/.test(normalized)
+  const normalized = text.toLocaleLowerCase('sv-SE').replace(/[\s，。！？,.!?、]/g, '')
+  return /^(停|停止|停下|别说了|取消|取消任务|不要了|算了|stopp|stoppa|avbryt|avbrytuppgiften|läggav|sluta)$/.test(normalized)
 }
 
 function isBargeInError(error: unknown): boolean {
@@ -817,7 +817,7 @@ function isBargeInError(error: unknown): boolean {
 }
 
 function isSensitiveDraft(text: string): boolean {
-  return /(转账|汇款|付款|支付|购买|下单|发送验证码|验证码|密码|删除|清空|卸载|格式化|关机|重启|抹掉|永久)/.test(text)
+  return /(转账|汇款|付款|支付|购买|下单|发送验证码|验证码|密码|删除|清空|卸载|格式化|关机|重启|抹掉|永久|överför|betala|köp|beställ|verifieringskod|lösenord|radera|töm|avinstallera|formatera|stäng av|starta om|permanent)/i.test(text)
 }
 
 function joinDraft(existing: string, addition: string): string {

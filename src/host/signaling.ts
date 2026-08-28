@@ -14,6 +14,7 @@ export interface SignalRequest {
 }
 
 const WORKSPACE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/
+const OPENAI_REALTIME_MODEL = 'gpt-realtime-2.1-mini'
 
 export function parseSignalRequest(value: unknown, provider: Provider): SignalRequest {
   if (typeof value !== 'object' || value === null) throw new HttpError(400, 'body must be an object')
@@ -37,6 +38,8 @@ export function parseSignalRequest(value: unknown, provider: Provider): SignalRe
       throw new HttpError(400, 'unsupported Qwen region')
     }
     request.region = (body.region as QwenRegion | undefined) ?? 'cn-beijing'
+  } else if (request.model !== undefined && request.model !== OPENAI_REALTIME_MODEL) {
+    throw new HttpError(400, 'unsupported OpenAI realtime model')
   }
   return request
 }
@@ -66,7 +69,7 @@ export async function exchangeQwenSdp(request: SignalRequest, apiKey: string, si
 export async function exchangeOpenAiSdp(request: SignalRequest, apiKey: string, signal: AbortSignal): Promise<string> {
   const session = {
     type: 'realtime',
-    model: request.model ?? 'gpt-realtime-2.1',
+    model: request.model ?? OPENAI_REALTIME_MODEL,
     instructions: request.instructions,
     audio: { output: { voice: request.voice ?? 'marin' } },
   }

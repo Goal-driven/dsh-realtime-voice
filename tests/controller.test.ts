@@ -585,9 +585,9 @@ test('speech activity cancels commit, never cuts a long phrase, and filler safel
   observer.onTextDelta('busy-turn', '完成。')
   observer.onTurnEnd('busy-turn', { ok: true, text: '完成。' })
   await delay(950)
-  assert.match(controller.getSnapshot().detail, /即将发送/)
+  assert.match(controller.getSnapshot().detail, /skickas snart/)
   callbacks.onSpeechStart?.()
-  assert.match(controller.getSnapshot().detail, /等待本句识别/)
+  assert.match(controller.getSnapshot().detail, /väntar på att sammanfoga/i)
   await delay(2000)
   assert.equal(submits, 0)
   // Only speech_stopped may resume. No actionable final follows (for example
