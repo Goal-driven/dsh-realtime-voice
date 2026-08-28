@@ -43,7 +43,7 @@ export function sessionUpdate(prefs: VoicePrefs): Record<string, unknown> {
           input: {
             turn_detection: {
               type: 'semantic_vad',
-              eagerness: 'auto',
+              eagerness: 'high',
               create_response: true,
               interrupt_response: true,
             },
@@ -110,16 +110,23 @@ export function parseToolCall(event: unknown): ToolCall | undefined {
 
 export function toolOutput(callId: string, output: unknown): Array<Record<string, unknown>> {
   const spoken = normalizeHarnessOutput(output)
-  return [{
+  const events: Array<Record<string, unknown>> = [{
     type: 'conversation.item.create',
     item: { type: 'function_call_output', call_id: callId, output: spoken },
-  }, {
+  }]
+  if (voiceAlreadySpoken(output)) return events
+  events.push({
     type: 'response.create',
     response: {
       output_modalities: ['audio'],
       tool_choice: 'none',
     },
-  }]
+  })
+  return events
+}
+
+function voiceAlreadySpoken(output: unknown): boolean {
+  return typeof output === 'object' && output !== null && (output as { voiceAlreadySpoken?: unknown }).voiceAlreadySpoken === true
 }
 
 function normalizeHarnessOutput(output: unknown): string {

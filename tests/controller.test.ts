@@ -352,6 +352,133 @@ test('short ASR finals merge into one Harness paragraph', async () => {
   assert.deepEqual(voiceContextFlags, [true])
 })
 
+test('OpenAI tool turns stream the first summary sentence and mark the final result as already spoken', async () => {
+  installBrowserStubs()
+  updatePrefs({ provider: 'openai', floorDelayMs: 400, floorComposerEnabled: false })
+  let callbacks!: RealtimeCallbacks
+  let voiceOutputContract = false
+  const spoken: string[] = []
+  const connection: VoiceConnection = {
+    connect: async () => {},
+    disconnect: () => {},
+    speak: async text => { spoken.push(text) },
+    waitForSpeechIdle: async () => {},
+  }
+  const bridge = {
+    delegate: async (_sessionId: string, _task: string, _signal: AbortSignal, options: {
+      voiceOutputContract?: boolean
+      onTextDelta?(delta: string): void
+    }) => {
+      voiceOutputContract = options.voiceOutputContract === true
+      options.onTextDelta?.('<!-- voice-summary -->Ja, jag hör dig nu.<!-- /voice-summary -->Detaljer följer.')
+      return { ok: true as const, text: '<!-- voice-summary -->Ja, jag hör dig nu.<!-- /voice-summary -->Detaljer följer.' }
+    },
+    cancel: async () => false,
+  } as unknown as HarnessBridge
+  const controller = new VoiceController('s1', bridge, (_prefs, value) => { callbacks = value; return connection })
+  await controller.toggle()
+
+  const result = await callbacks.onToolCall({ callId: 'call-1', name: 'delegate_to_harness', arguments: '{"task":"Är du där?"}' }) as {
+    ok: boolean
+    text: string
+    voiceAlreadySpoken?: boolean
+  }
+
+  assert.equal(voiceOutputContract, true)
+  assert.deepEqual(spoken, ['Ja, jag hör dig nu.'])
+  assert.equal(result.voiceAlreadySpoken, true)
+})
+
+test('OpenAI slow tool turns acknowledge the wait in Swedish before Harness finishes', async () => {
+  installBrowserStubs()
+  updatePrefs({ provider: 'openai', floorDelayMs: 400, floorComposerEnabled: false })
+  let callbacks!: RealtimeCallbacks
+  let delegateCallbacks!: { onTextDelta?(delta: string): void }
+  let resolveDelegate!: (value: { ok: true; text: string }) => void
+  const spoken: string[] = []
+  const connection: VoiceConnection = {
+    connect: async () => {},
+    disconnect: () => {},
+    speak: async text => { spoken.push(text) },
+    waitForSpeechIdle: async () => {},
+  }
+  const bridge = {
+    delegate: async (_sessionId: string, _task: string, _signal: AbortSignal, options: { onTextDelta?(delta: string): void }) => {
+      delegateCallbacks = options
+      return await new Promise<{ ok: true; text: string }>(resolve => { resolveDelegate = resolve })
+    },
+    cancel: async () => false,
+  } as unknown as HarnessBridge
+  const controller = new VoiceController('s1', bridge, (_prefs, value) => { callbacks = value; return connection })
+  await controller.toggle()
+
+  const toolTurn = callbacks.onToolCall({ callId: 'call-2', name: 'delegate_to_harness', arguments: '{"task":"Kontrollera driftsättningen"}' })
+  await delay(430)
+  assert.deepEqual(spoken, ['Jag arbetar på det.'])
+
+  delegateCallbacks.onTextDelta?.('Driftsättningen är nu kontrollerad.')
+  resolveDelegate({ ok: true, text: 'Driftsättningen är nu kontrollerad.' })
+  const result = await toolTurn as { voiceAlreadySpoken?: boolean }
+  assert.deepEqual(spoken, ['Jag arbetar på det.', 'Driftsättningen är nu kontrollerad.'])
+  assert.equal(result.voiceAlreadySpoken, true)
+})
+
+test('OpenAI keeps an already completed answer marked when the earlier wait cue failed', async () => {
+  installBrowserStubs()
+  updatePrefs({ provider: 'openai', floorDelayMs: 400, floorComposerEnabled: false })
+  let callbacks!: RealtimeCallbacks
+  const spoken: string[] = []
+  let cueAttempts = 0
+  const connection: VoiceConnection = {
+    connect: async () => {},
+    disconnect: () => {},
+    speak: async text => {
+      if (text === 'Jag arbetar på det.') { cueAttempts++; throw new Error('cue failed') }
+      spoken.push(text)
+    },
+    waitForSpeechIdle: async () => {},
+  }
+  const bridge = {
+    delegate: async (_sessionId: string, _task: string, _signal: AbortSignal, options: { onTextDelta?(delta: string): void }) => {
+      await delay(430)
+      options.onTextDelta?.('Svaret är klart.')
+      return { ok: true as const, text: 'Svaret är klart.' }
+    },
+    cancel: async () => false,
+  } as unknown as HarnessBridge
+  const controller = new VoiceController('s1', bridge, (_prefs, value) => { callbacks = value; return connection })
+  await controller.toggle()
+
+  const result = await callbacks.onToolCall({ callId: 'call-3', name: 'delegate_to_harness', arguments: '{"task":"Kontrollera"}' }) as {
+    voiceAlreadySpoken?: boolean
+  }
+
+  assert.deepEqual(spoken, ['Svaret är klart.'])
+  assert.equal(cueAttempts, 1)
+  assert.equal(result.voiceAlreadySpoken, true)
+})
+
+test('OpenAI delegate rejection disposes its Swedish wait cue', async () => {
+  installBrowserStubs()
+  updatePrefs({ provider: 'openai', floorDelayMs: 20, floorComposerEnabled: false })
+  let callbacks!: RealtimeCallbacks
+  const spoken: string[] = []
+  const connection: VoiceConnection = { connect: async () => {}, disconnect: () => {}, speak: async text => { spoken.push(text) } }
+  const bridge = {
+    delegate: async () => { throw new Error('delegate offline') },
+    cancel: async () => false,
+  } as unknown as HarnessBridge
+  const controller = new VoiceController('s1', bridge, (_prefs, value) => { callbacks = value; return connection })
+  await controller.toggle()
+
+  const result = await callbacks.onToolCall({ callId: 'call-4', name: 'delegate_to_harness', arguments: '{"task":"Kontrollera"}' }) as { ok: boolean; error: string }
+  await delay(80)
+
+  assert.equal(result.ok, false)
+  assert.match(result.error, /offline/)
+  assert.deepEqual(spoken, [])
+})
+
 test('a transcript arriving before TTS starts cannot preempt the pending reply', async () => {
   installBrowserStubs()
   updatePrefs({ qwenMergeMs: 100 })

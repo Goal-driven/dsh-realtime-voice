@@ -27,12 +27,34 @@ export declare class RealtimeConnection {
     private sessionCreated;
     private updateSent;
     private responseActive;
+    private readonly echoGuard;
+    private speechSequence;
+    private readonly speechWaiters;
+    private readonly speechIdleWaiters;
+    private readonly cancelledSpeech;
+    private speechMuteHolds;
     private readonly telemetry;
     constructor(prefs: VoicePrefs, callbacks: RealtimeCallbacks);
     connect(): Promise<void>;
+    speak(text: string): Promise<void>;
+    waitForSpeechIdle(): Promise<void>;
+    cancelSpeech(): void;
     disconnect(): void;
     private handleEvent;
+    private recordToolSpeech;
+    private captureSpeechResponse;
+    private settleSpeechResponse;
+    private resolveSpeechIdle;
+    private rejectSpeech;
+    private trackCancelledSpeech;
     private send;
+    private sendRequired;
     private maybeSendSessionUpdate;
     private publishTelemetry;
+}
+export declare class RealtimeEchoGuard {
+    private recentSpeech;
+    private recordedAt;
+    recordSpeech(text: string, now?: number): void;
+    shouldSuppress(task: string, now?: number): boolean;
 }

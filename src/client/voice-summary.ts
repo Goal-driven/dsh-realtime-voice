@@ -184,7 +184,7 @@ function partialParagraphSuffixLength(text: string): number {
 }
 
 function completedSentenceBoundary(text: string): number {
-  const match = /[。！？!?；;](?:[”’」』】）)])?/u.exec(text)
+  const match = /(?:[。！？!?；;…]|(?<!\d)\.(?!\d))(?:[”’」』】）)])?(?=\s|$)/u.exec(text)
   if (match === null || match.index === undefined) return 0
   return match.index + match[0].length
 }
