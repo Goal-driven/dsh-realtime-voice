@@ -56,6 +56,7 @@ export declare class RealtimeConnection {
     private maybeSendSessionUpdate;
     private publishTelemetry;
 }
+export declare function attachLiveMicrophone(peer: RTCPeerConnection, track: MediaStreamTrack, stream: MediaStream): RTCRtpSender;
 export declare class RealtimeEchoGuard {
     private recentSpeech;
     private recordedAt;

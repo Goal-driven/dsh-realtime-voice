@@ -1,4 +1,5 @@
 import { HttpError } from './security.ts'
+import { OPENAI_REALTIME_MODEL, openAiRealtimeSession } from '../openai-session.ts'
 
 export type Provider = 'openai' | 'qwen'
 export type QwenRegion = 'cn-beijing' | 'ap-southeast-1'
@@ -14,8 +15,6 @@ export interface SignalRequest {
 }
 
 const WORKSPACE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/
-const OPENAI_REALTIME_MODEL = 'gpt-realtime-2.1-mini'
-
 export function parseSignalRequest(value: unknown, provider: Provider): SignalRequest {
   if (typeof value !== 'object' || value === null) throw new HttpError(400, 'body must be an object')
   const body = value as Record<string, unknown>
@@ -67,12 +66,7 @@ export async function exchangeQwenSdp(request: SignalRequest, apiKey: string, si
 }
 
 export async function exchangeOpenAiSdp(request: SignalRequest, apiKey: string, signal: AbortSignal): Promise<string> {
-  const session = {
-    type: 'realtime',
-    model: request.model ?? OPENAI_REALTIME_MODEL,
-    instructions: request.instructions,
-    audio: { output: { voice: request.voice ?? 'marin' } },
-  }
+  const session = openAiInitialSession(request)
   const form = new FormData()
   form.set('sdp', request.sdp)
   form.set('session', JSON.stringify(session))
@@ -83,6 +77,14 @@ export async function exchangeOpenAiSdp(request: SignalRequest, apiKey: string, 
     signal,
   })
   return responseSdp(response)
+}
+
+export function openAiInitialSession(request: SignalRequest): Record<string, unknown> {
+  return openAiRealtimeSession({
+    model: request.model ?? OPENAI_REALTIME_MODEL,
+    instructions: request.instructions,
+    voice: request.voice,
+  })
 }
 
 async function responseSdp(response: Response): Promise<string> {

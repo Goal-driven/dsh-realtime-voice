@@ -14,3 +14,4 @@ export declare function qwenEndpoint(request: SignalRequest): string;
 export declare function normalizeSdp(sdp: string): string;
 export declare function exchangeQwenSdp(request: SignalRequest, apiKey: string, signal: AbortSignal): Promise<string>;
 export declare function exchangeOpenAiSdp(request: SignalRequest, apiKey: string, signal: AbortSignal): Promise<string>;
+export declare function openAiInitialSession(request: SignalRequest): Record<string, unknown>;

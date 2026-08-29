@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { RealtimeConnection, RealtimeEchoGuard } from '../src/client/realtime.ts'
+import { attachLiveMicrophone, RealtimeConnection, RealtimeEchoGuard } from '../src/client/realtime.ts'
 import type { VoicePrefs } from '../src/client/prefs.ts'
 
 test('the assistant voice cannot return as a new Swedish Harness task', () => {
@@ -71,6 +71,25 @@ test('OpenAI reports transcription failures instead of listening forever', async
     state: 'error',
     detail: 'Svensk taligenkänning misslyckades: transcription unavailable',
   })
+})
+
+test('the microphone stays attached while the initial WebRTC offer is negotiated', () => {
+  const track = {} as MediaStreamTrack
+  const stream = {} as MediaStream
+  let replaceCalls = 0
+  const sender = {
+    async replaceTrack() { replaceCalls++ },
+  } as unknown as RTCRtpSender
+  const peer = {
+    addTrack(value: MediaStreamTrack, source: MediaStream) {
+      assert.equal(value, track)
+      assert.equal(source, stream)
+      return sender
+    },
+  } as unknown as RTCPeerConnection
+
+  assert.equal(attachLiveMicrophone(peer, track, stream), sender)
+  assert.equal(replaceCalls, 0)
 })
 
 test('out-of-band OpenAI speech reads streamed Harness text without polluting the conversation', async () => {

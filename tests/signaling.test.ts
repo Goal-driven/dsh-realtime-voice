@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { HttpError } from '../src/host/security.ts'
-import { normalizeSdp, parseSignalRequest, qwenEndpoint } from '../src/host/signaling.ts'
+import { normalizeSdp, openAiInitialSession, parseSignalRequest, qwenEndpoint } from '../src/host/signaling.ts'
 
 test('normalizes SDP and builds allowlisted Qwen endpoint', () => {
   const request = parseSignalRequest({
@@ -29,4 +29,26 @@ test('rejects endpoint injection and oversized provider fields', () => {
 test('normalizeSdp is idempotent', () => {
   const once = normalizeSdp('v=0\r\na=1\r\n')
   assert.equal(normalizeSdp(once), once)
+})
+
+test('OpenAI starts with Swedish ASR and manual Harness turn control', () => {
+  const session = openAiInitialSession({
+    provider: 'openai',
+    sdp: 'v=0\r\nlong-enough\r\n',
+    model: 'gpt-realtime-2.1-mini',
+    voice: 'marin',
+    instructions: 'Tala svenska.',
+  }) as {
+    model: string
+    audio: { input: { transcription: { model: string; language: string }; turn_detection: { create_response: boolean; interrupt_response: boolean } } }
+  }
+
+  assert.equal(session.model, 'gpt-realtime-2.1-mini')
+  assert.deepEqual(session.audio.input.transcription, {
+    model: 'gpt-4o-mini-transcribe',
+    language: 'sv',
+    prompt: 'Svenskt samtal. Bevara namn, produktnamn och tekniska termer ordagrant.',
+  })
+  assert.equal(session.audio.input.turn_detection.create_response, false)
+  assert.equal(session.audio.input.turn_detection.interrupt_response, false)
 })
