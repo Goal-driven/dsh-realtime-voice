@@ -25,14 +25,12 @@ export function sessionUpdate(prefs: VoicePrefs): Record<string, unknown> {
     },
   }]
 
-  const instructions = `${prefs.instructions.trim()}\n\n${HARNESS_FIRST_POLICY}`.trim()
-
   if (prefs.provider === 'openai') {
     return {
       type: 'session.update',
       session: {
         type: 'realtime',
-        instructions,
+        instructions: prefs.instructions.trim(),
         output_modalities: ['audio'],
         truncation: {
           type: 'retention_ratio',
@@ -41,20 +39,28 @@ export function sessionUpdate(prefs: VoicePrefs): Record<string, unknown> {
         },
         audio: {
           input: {
+            noise_reduction: { type: 'far_field' },
+            transcription: {
+              model: 'gpt-4o-mini-transcribe',
+              language: 'sv',
+              prompt: 'Svenskt samtal. Bevara namn, produktnamn och tekniska termer ordagrant.',
+            },
             turn_detection: {
-              type: 'semantic_vad',
-              eagerness: 'high',
-              create_response: true,
-              interrupt_response: true,
+              type: 'server_vad',
+              threshold: 0.35,
+              prefix_padding_ms: 400,
+              silence_duration_ms: 700,
+              create_response: false,
+              interrupt_response: false,
             },
           },
           output: { voice: prefs.openaiVoice },
         },
-        tools: functions.map(fn => ({ type: 'function', ...fn })),
-        tool_choice: 'required',
       },
     }
   }
+
+  const instructions = `${prefs.instructions.trim()}\n\n${HARNESS_FIRST_POLICY}`.trim()
 
   return {
     type: 'session.update',
