@@ -53,6 +53,27 @@ test('OpenAI sends exact Swedish transcripts to Harness and preserves busy-turn 
   assert.equal(states.some(value => value.detail === 'Bearbetar svenskt tal'), true)
 })
 
+test('OpenAI treats speech that starts after playback as a new voice turn', async () => {
+  const transcripts: Array<{ text: string; busy?: boolean }> = []
+  const connection = new RealtimeConnection(prefs(), {
+    onState() {},
+    async onToolCall() {},
+    async onTranscript(text, meta) { transcripts.push({ text, busy: meta?.capturedWhileBusy }) },
+  })
+  const internals = connection as unknown as { handleEvent(raw: unknown): Promise<void> }
+
+  connection.setInputPhase('post-playback')
+  await internals.handleEvent(JSON.stringify({ type: 'input_audio_buffer.speech_started', item_id: 'follow-up' }))
+  connection.setInputPhase('listening')
+  await internals.handleEvent(JSON.stringify({
+    type: 'conversation.item.input_audio_transcription.completed',
+    item_id: 'follow-up',
+    transcript: 'Det här är fråga två.',
+  }))
+
+  assert.deepEqual(transcripts, [{ text: 'Det här är fråga två.', busy: false }])
+})
+
 test('OpenAI reports transcription failures instead of listening forever', async () => {
   const states: Array<{ state: string; detail?: string }> = []
   const connection = new RealtimeConnection(prefs(), {

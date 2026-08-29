@@ -2,7 +2,7 @@ import { HarnessBridge, type DelegateResult, type TextResetReason } from './harn
 import { FloorManager, type FloorStage } from './floor-manager.ts'
 import { resolveDynamicFloorCue } from './floor-composer.ts'
 import { loadPrefs, type VoicePrefs } from './prefs.ts'
-import { RealtimeConnection, type RealtimeCallbacks, type TranscriptMeta } from './realtime.ts'
+import { isBusyInputPhase, RealtimeConnection, type RealtimeCallbacks, type TranscriptMeta } from './realtime.ts'
 import type { ToolCall } from './protocol.ts'
 import { QwenPipelineConnection } from './qwen-pipeline.ts'
 import { TurnCoordinator, type TurnPhase } from './turn-coordinator.ts'
@@ -192,7 +192,7 @@ export class VoiceController {
       || this.hasPendingDraft()
       || this.nativeSubmitPending
       || this.taskAbort !== undefined
-      || (this.turns.phase !== 'listening' && this.turns.phase !== 'endpoint-candidate')
+      || isBusyInputPhase(this.turns.phase)
     this.transcriptWasBusy ||= wasBusy
     this.transcriptCapturedWhileBusy ||= capturedWhileBusy
     if (meta.voiceprint === 'rejected' || meta.voiceprint === 'unavailable') this.transcriptVoiceprint = meta.voiceprint
@@ -330,7 +330,7 @@ export class VoiceController {
     // ASR remains open while Harness/TTS works so genuine barge-in stays
     // possible. Before audio has actually started, however, a late/background
     // final must not preempt the answer that is about to play.
-    if (this.turns.phase === 'tts-pending' || this.turns.phase === 'tts-speaking' || this.turns.phase === 'post-playback') {
+    if (isBusyInputPhase(this.turns.phase)) {
       this.appendToDraft(task)
       this.setState(this.turns.phase === 'tts-speaking' ? 'speaking' : 'working', 'Fortsatt uppgift: Nytt tal ligger i utkastet; skicka eller rensa')
       return

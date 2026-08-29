@@ -245,7 +245,7 @@ export class RealtimeConnection {
     }
     if (type === 'input_audio_buffer.speech_started') {
       const itemId = eventString(event, 'item_id')
-      if (itemId !== undefined) this.utteranceBusy.set(itemId, isBusyPhase(this.inputPhase))
+      if (itemId !== undefined) this.utteranceBusy.set(itemId, isBusyInputPhase(this.inputPhase))
       this.callbacks.onSpeechStart?.()
       if (this.responseActive) this.send({ type: 'response.cancel' })
       this.callbacks.onState('listening', 'Tal upptäckt')
@@ -258,8 +258,8 @@ export class RealtimeConnection {
       const transcript = eventString(event, 'transcript')?.trim() ?? ''
       const itemId = eventString(event, 'item_id')
       const capturedWhileBusy = itemId === undefined
-        ? isBusyPhase(this.inputPhase)
-        : this.utteranceBusy.get(itemId) ?? isBusyPhase(this.inputPhase)
+        ? isBusyInputPhase(this.inputPhase)
+        : this.utteranceBusy.get(itemId) ?? isBusyInputPhase(this.inputPhase)
       if (itemId !== undefined) this.utteranceBusy.delete(itemId)
       if (transcript === '') return
       if (this.echoGuard.shouldSuppress(transcript)) {
@@ -429,8 +429,8 @@ function eventString(value: unknown, key: string): string | undefined {
   return typeof nested === 'string' ? nested : undefined
 }
 
-function isBusyPhase(phase: TurnPhase): boolean {
-  return phase !== 'listening' && phase !== 'endpoint-candidate'
+export function isBusyInputPhase(phase: TurnPhase): boolean {
+  return phase === 'harness' || phase === 'tts-pending' || phase === 'tts-speaking'
 }
 
 const ECHO_WINDOW_MS = 2_000

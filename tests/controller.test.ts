@@ -294,6 +294,51 @@ test('a late ASR final keeps the busy provenance from its speech-start event', a
   assert.equal(draft, '语音开始时其实仍在忙')
 })
 
+test('a second utterance during post-playback starts another voice turn', async () => {
+  installBrowserStubs()
+  updatePrefs({ provider: 'openai', qwenMergeMs: 100, floorDelayMs: 3_500 })
+  let callbacks!: RealtimeCallbacks
+  let delegates = 0
+  let draft = ''
+  const spoken: string[] = []
+  let resolveFirstPlayback!: () => void
+  let resolveSecondPlayback!: () => void
+  const firstPlayback = new Promise<void>(resolve => { resolveFirstPlayback = resolve })
+  const secondPlayback = new Promise<void>(resolve => { resolveSecondPlayback = resolve })
+  let playbackCount = 0
+  const connection: VoiceConnection = {
+    connect: async () => {},
+    disconnect: () => {},
+    speak: async text => { spoken.push(text) },
+    setInputPhase: phase => {
+      if (phase !== 'post-playback') return
+      playbackCount++
+      if (playbackCount === 1) resolveFirstPlayback()
+      if (playbackCount === 2) resolveSecondPlayback()
+    },
+  }
+  const factory: VoiceConnectionFactory = (_prefs, value) => { callbacks = value; return connection }
+  const bridge = {
+    delegate: async () => {
+      delegates++
+      return { ok: true as const, text: `Svar ${delegates}.` }
+    },
+  } as unknown as HarnessBridge
+  const controller = new VoiceController('s1', bridge, factory)
+  controller.bindDraft({ getDraft: () => draft, setDraft: value => { draft = value } })
+  await controller.toggle()
+
+  await callbacks.onTranscript?.('Första frågan.')
+  await firstPlayback
+  await callbacks.onTranscript?.('Andra frågan.', { capturedWhileBusy: false })
+  await secondPlayback
+
+  assert.equal(delegates, 2)
+  assert.equal(draft, '')
+  assert.deepEqual(spoken, ['Svar 1.', 'Svar 2.'])
+  controller.stop()
+})
+
 test('speech captured during TTS is staged and never starts a second Harness turn', async () => {
   installBrowserStubs()
   updatePrefs({ qwenMergeMs: 100 })
