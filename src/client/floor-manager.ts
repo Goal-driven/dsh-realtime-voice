@@ -1,3 +1,5 @@
+import { DEFAULT_FLOOR_DELAY_MS } from '../floor-policy.ts'
+
 const DEFAULT_ACK = '嗯，我认真想一下。'
 
 export type FloorResetReason = 'tool' | 'retry'
@@ -43,7 +45,7 @@ export class FloorManager {
     private readonly emit: (text: string) => void,
     timings: FloorTimings = {},
   ) {
-    this.progressDelayMs = timings.progressDelayMs ?? 3_500
+    this.progressDelayMs = timings.progressDelayMs ?? DEFAULT_FLOOR_DELAY_MS
     this.longWaitMs = timings.longWaitMs ?? 7_000
     this.maxCues = timings.maxCues ?? 3
     this.resolveCue = timings.resolveCue

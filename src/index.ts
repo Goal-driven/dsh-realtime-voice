@@ -13,6 +13,7 @@ import {
 import { QwenSpeechProxy } from './host/qwen-speech-proxy.ts'
 import { TencentVoiceprintClient, validVoiceprintAudio, validVoiceprintId } from './host/tencent-voiceprint.ts'
 import { cleanFloorTopic, composeFloorText, validateFloorCue, type FloorProvider, type FloorStage } from './host/floor-composer.ts'
+import { DEFAULT_FLOOR_DELAY_MS, MAX_FLOOR_DELAY_MS, MIN_FLOOR_DELAY_MS } from './floor-policy.ts'
 import { VOICE_OUTPUT_CONTEXT } from './voice-contract.ts'
 
 export const name = 'dsh-realtime-voice'
@@ -106,7 +107,7 @@ const prefsSchema = z.object({
   voiceDraftDwellMs: z.number().default(1800),
   voiceDraftAllowWithoutVoiceprint: z.boolean().default(false),
   voiceDraftSensitiveDeny: z.boolean().default(true),
-  floorDelayMs: z.number().default(800),
+  floorDelayMs: z.number().default(DEFAULT_FLOOR_DELAY_MS),
   floorComposerEnabled: z.boolean().default(true),
   qwenFloorModel: z.string().default('qwen3.5-flash'),
   openaiFloorModel: z.string().default('gpt-5-mini'),
@@ -461,7 +462,7 @@ function sanitizePrefs(value: unknown): Record<string, unknown> {
     voiceDraftDwellMs: Math.max(qwenMergeMs, numberInRange(source.voiceDraftDwellMs, 500, 6000, 1800)),
     voiceDraftAllowWithoutVoiceprint: source.voiceDraftAllowWithoutVoiceprint === true,
     voiceDraftSensitiveDeny: source.voiceDraftSensitiveDeny !== false,
-    floorDelayMs: numberInRange(source.floorDelayMs, 400, 3000, 800),
+    floorDelayMs: numberInRange(source.floorDelayMs, MIN_FLOOR_DELAY_MS, MAX_FLOOR_DELAY_MS, DEFAULT_FLOOR_DELAY_MS),
     floorComposerEnabled: source.floorComposerEnabled !== false,
     qwenFloorModel: text(source.qwenFloorModel, 128) || 'qwen3.5-flash',
     openaiFloorModel: text(source.openaiFloorModel, 128) || 'gpt-5-mini',

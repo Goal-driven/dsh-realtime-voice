@@ -4,6 +4,7 @@ import { VoiceController, type VoiceConnection, type VoiceConnectionFactory } fr
 import type { HarnessBridge } from '../src/client/harness-delegate.ts'
 import type { RealtimeCallbacks } from '../src/client/realtime.ts'
 import { updatePrefs } from '../src/client/prefs.ts'
+import { MIN_FLOOR_DELAY_MS } from '../src/floor-policy.ts'
 
 function installBrowserStubs(): void {
   Object.defineProperty(globalThis, 'location', { configurable: true, value: { search: '', href: 'http://127.0.0.1/' } })
@@ -196,7 +197,7 @@ test('native slow turn speaks one floor cue then the first answer paragraph', as
   await controller.toggle()
   await callbacks.onTranscript?.('分析一下这个训练计划')
   await delay(130)
-  await delay(430)
+  await delay(MIN_FLOOR_DELAY_MS + 30)
   observer.onTextDelta('slow-turn', '这个计划可以继续，但要调整动作顺序。\n\n以下是详细安排。')
   observer.onTurnEnd('slow-turn', { ok: true, text: '这个计划可以继续，但要调整动作顺序。\n\n以下是详细安排。' })
   await delay(450)
@@ -206,7 +207,7 @@ test('native slow turn speaks one floor cue then the first answer paragraph', as
   controller.stop()
 })
 
-test('native fast turn cancels the floor cue', async () => {
+test('a short dialogue response never starts with a working cue', async () => {
   installBrowserStubs()
   updatePrefs({ provider: 'qwen', qwenMergeMs: 100, floorDelayMs: 400 })
   let callbacks!: RealtimeCallbacks
@@ -232,6 +233,7 @@ test('native fast turn cancels the floor cue', async () => {
   await controller.toggle()
   await callbacks.onTranscript?.('你好')
   await delay(130)
+  await delay(800)
   observer.onTextDelta('fast-turn', '你好，很高兴见到你。')
   observer.onTurnEnd('fast-turn', { ok: true, text: '你好，很高兴见到你。' })
   await delay(450)
@@ -413,7 +415,7 @@ test('OpenAI slow tool turns acknowledge the wait in Swedish before Harness fini
   await controller.toggle()
 
   const toolTurn = callbacks.onToolCall({ callId: 'call-2', name: 'delegate_to_harness', arguments: '{"task":"Kontrollera driftsättningen"}' })
-  await delay(430)
+  await delay(MIN_FLOOR_DELAY_MS + 30)
   assert.deepEqual(spoken, ['Jag arbetar på det.'])
 
   delegateCallbacks.onTextDelta?.('Driftsättningen är nu kontrollerad.')
@@ -440,7 +442,7 @@ test('OpenAI keeps an already completed answer marked when the earlier wait cue 
   }
   const bridge = {
     delegate: async (_sessionId: string, _task: string, _signal: AbortSignal, options: { onTextDelta?(delta: string): void }) => {
-      await delay(430)
+      await delay(MIN_FLOOR_DELAY_MS + 30)
       options.onTextDelta?.('Svaret är klart.')
       return { ok: true as const, text: 'Svaret är klart.' }
     },
