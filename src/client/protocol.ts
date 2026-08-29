@@ -1,4 +1,5 @@
 import type { VoicePrefs } from './prefs.ts'
+import { openAiRealtimeSession } from '../openai-session.ts'
 
 export const HARNESS_FIRST_POLICY = `
 Du är DeepSeek Harness lager för realtime-röst, inte en fristående assistent.
@@ -28,35 +29,10 @@ export function sessionUpdate(prefs: VoicePrefs): Record<string, unknown> {
   if (prefs.provider === 'openai') {
     return {
       type: 'session.update',
-      session: {
-        type: 'realtime',
+      session: openAiRealtimeSession({
         instructions: prefs.instructions.trim(),
-        output_modalities: ['audio'],
-        truncation: {
-          type: 'retention_ratio',
-          retention_ratio: 0.8,
-          token_limits: { post_instructions: 96_000 },
-        },
-        audio: {
-          input: {
-            noise_reduction: { type: 'far_field' },
-            transcription: {
-              model: 'gpt-4o-mini-transcribe',
-              language: 'sv',
-              prompt: 'Svenskt samtal. Bevara namn, produktnamn och tekniska termer ordagrant.',
-            },
-            turn_detection: {
-              type: 'server_vad',
-              threshold: 0.35,
-              prefix_padding_ms: 400,
-              silence_duration_ms: 700,
-              create_response: false,
-              interrupt_response: false,
-            },
-          },
-          output: { voice: prefs.openaiVoice },
-        },
-      },
+        voice: prefs.openaiVoice,
+      }),
     }
   }
 

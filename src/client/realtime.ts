@@ -58,14 +58,20 @@ export class RealtimeConnection {
     const track = this.microphone.getAudioTracks()[0]
     if (track === undefined) throw new Error('Ingen mikrofonkanal är tillgänglig')
     this.microphoneTrack = track
-    this.audioSender = peer.addTrack(track, this.microphone)
-    await this.audioSender.replaceTrack(null)
+    this.audioSender = attachLiveMicrophone(peer, track, this.microphone)
+    track.addEventListener('ended', () => this.callbacks.onState('error', 'Mikrofonspåret avslutades. Starta rösten igen.'))
 
     this.audio = document.createElement('audio')
     this.audio.autoplay = true
     this.audio.style.display = 'none'
     document.body.appendChild(this.audio)
-    peer.ontrack = event => { if (this.audio !== undefined) this.audio.srcObject = event.streams[0] ?? new MediaStream([event.track]) }
+    peer.ontrack = event => {
+      if (this.audio === undefined) return
+      this.audio.srcObject = event.streams[0] ?? new MediaStream([event.track])
+      void this.audio.play().catch(error => {
+        this.callbacks.onState('error', `Chrome kunde inte spela upp rösten: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    }
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') {
         this.callbacks.onState('error', `WebRTC ${peer.connectionState}`)
@@ -405,6 +411,10 @@ export class RealtimeConnection {
     target.__VALUEHUB_VOICE_TELEMETRY__ = snapshot
     window.dispatchEvent(new CustomEvent<VoiceTelemetrySnapshot>('valuehub:voice-telemetry', { detail: snapshot }))
   }
+}
+
+export function attachLiveMicrophone(peer: RTCPeerConnection, track: MediaStreamTrack, stream: MediaStream): RTCRtpSender {
+  return peer.addTrack(track, stream)
 }
 
 function eventRecord(value: unknown, key: string): Record<string, unknown> {

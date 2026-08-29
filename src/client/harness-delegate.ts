@@ -47,6 +47,10 @@ interface SessionObserver {
 
 export type VoiceContextSetter = (sessionId: string, active: boolean, signal?: AbortSignal) => Promise<void>
 
+const ALREADY_RUNNING = 'En röstuppgift körs redan i den här sessionen.'
+const CANCELLED = 'Avbruten'
+const PLUGIN_UNLOADED = 'Röstpluginen har stängts'
+
 export class HarnessBridge {
   private readonly streamAbort = new AbortController()
   private streamStarted = false
@@ -65,13 +69,13 @@ export class HarnessBridge {
 
   async delegate(sessionId: string, task: string, signal?: AbortSignal, callbacks: DelegateCallbacks = {}): Promise<DelegateResult> {
     if (callbacks.voiceOutputContract !== true) return await this.delegateCore(sessionId, task, signal, callbacks)
-    if (this.reservations.has(sessionId) || this.operations.has(sessionId)) return { ok: false, error: '该会话已有一个语音委派任务在执行' }
+    if (this.reservations.has(sessionId) || this.operations.has(sessionId)) return { ok: false, error: ALREADY_RUNNING }
     try {
       await this.setVoiceContext(sessionId, true, signal)
       return await this.delegateCore(sessionId, task, signal, callbacks)
     } catch (error) {
-      if (signal?.aborted === true) return { ok: false, cancelled: true, error: '已取消' }
-      return { ok: false, error: `语音输出上下文注入失败：${error instanceof Error ? error.message : String(error)}` }
+      if (signal?.aborted === true) return { ok: false, cancelled: true, error: CANCELLED }
+      return { ok: false, error: `Röstläget kunde inte aktiveras: ${error instanceof Error ? error.message : String(error)}` }
     } finally {
       try { await this.setVoiceContext(sessionId, false) } catch { /* TTL is the final cleanup fallback */ }
     }
@@ -89,7 +93,7 @@ export class HarnessBridge {
   }
 
   private async delegateCore(sessionId: string, task: string, signal?: AbortSignal, callbacks: DelegateCallbacks = {}): Promise<DelegateResult> {
-    if (this.reservations.has(sessionId) || this.operations.has(sessionId)) return { ok: false, error: '该会话已有一个语音委派任务在执行' }
+    if (this.reservations.has(sessionId) || this.operations.has(sessionId)) return { ok: false, error: ALREADY_RUNNING }
     this.reservations.add(sessionId)
     let response: Awaited<ReturnType<RpcApi['sessions']['prompt']>>
     let cancelRequested = false
@@ -100,11 +104,11 @@ export class HarnessBridge {
     try {
       this.startStream()
       await this.waitUntilSubscribed(sessionId, signal)
-      if (signal?.aborted === true) return { ok: false, cancelled: true, error: '已取消' }
+      if (signal?.aborted === true) return { ok: false, cancelled: true, error: CANCELLED }
       signal?.addEventListener('abort', requestCancel, { once: true })
       const promptAbort = new AbortController()
       const abortForDispose = () => promptAbort.abort(this.streamAbort.signal.reason)
-      const timeout = setTimeout(() => promptAbort.abort(new Error('Harness prompt 准入超时')), this.promptTimeoutMs)
+      const timeout = setTimeout(() => promptAbort.abort(new Error('Harness kunde inte starta uppgiften i tid')), this.promptTimeoutMs)
       this.streamAbort.signal.addEventListener('abort', abortForDispose, { once: true })
       try {
         response = await this.api.sessions.prompt({
@@ -114,15 +118,15 @@ export class HarnessBridge {
           clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }, promptAbort.signal)
       } catch (error) {
-        if (cancelRequested) return { ok: false, cancelled: true, error: '已取消' }
-        if (this.streamAbort.signal.aborted) return { ok: false, cancelled: true, error: '插件已卸载' }
+        if (cancelRequested) return { ok: false, cancelled: true, error: CANCELLED }
+        if (this.streamAbort.signal.aborted) return { ok: false, cancelled: true, error: PLUGIN_UNLOADED }
         return { ok: false, error: error instanceof Error ? error.message : String(error) }
       } finally {
         clearTimeout(timeout)
         this.streamAbort.signal.removeEventListener('abort', abortForDispose)
       }
       if (!response.result.ok) {
-        if (cancelRequested) return { ok: false, cancelled: true, error: '已取消' }
+        if (cancelRequested) return { ok: false, cancelled: true, error: CANCELLED }
         return { ok: false, error: `${response.result.error.code}: ${response.result.error.message}` }
       }
     } finally {
@@ -130,7 +134,7 @@ export class HarnessBridge {
     }
 
     return await new Promise<DelegateResult>((resolve) => {
-      const timer = setTimeout(() => this.finish(sessionId, { ok: false, error: 'Harness 任务等待超时' }), 10 * 60_000)
+      const timer = setTimeout(() => this.finish(sessionId, { ok: false, error: 'Harness-uppgiften tog för lång tid' }), 10 * 60_000)
       const operation: Operation = {
         sessionId,
         rpcId: response.rpcId,
@@ -166,7 +170,7 @@ export class HarnessBridge {
         throw new Error(`${removed.result.error.code}: ${removed.result.error.message}`)
       }
       if (!removed.result.ok) await this.expectOk(await this.api.sessions.cancel({ sessionId }))
-      else this.finish(sessionId, { ok: false, cancelled: true, error: '已取消' })
+      else this.finish(sessionId, { ok: false, cancelled: true, error: CANCELLED })
     }
     return true
   }
@@ -174,7 +178,7 @@ export class HarnessBridge {
   dispose(): void {
     this.streamAbort.abort()
     for (const sessionId of [...this.operations.keys()]) {
-      this.finish(sessionId, { ok: false, cancelled: true, error: '插件已卸载' })
+      this.finish(sessionId, { ok: false, cancelled: true, error: PLUGIN_UNLOADED })
     }
     this.observers.clear()
   }
@@ -221,7 +225,7 @@ export class HarnessBridge {
   private waitUntilSubscribed(sessionId: string, signal?: AbortSignal): Promise<void> {
     if (this.subscribed.has(sessionId)) return Promise.resolve()
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Harness 事件流订阅超时')), 10_000)
+      const timeout = setTimeout(() => reject(new Error('Harness händelseström kunde inte ansluta i tid')), 10_000)
       const done = () => { clearTimeout(timeout); resolve() }
       const list = this.readyWaiters.get(sessionId) ?? []
       list.push(done)
@@ -285,9 +289,9 @@ export class HarnessBridge {
     if (event.type === 'turn/end' && turn === operation.turn) {
       const reason = objectField(event.data, 'reason')
       const kind = typeof reason?.kind === 'string' ? reason.kind : typeof event.data?.reason === 'string' ? event.data.reason : 'completed'
-      if (kind === 'completed') this.finish(sessionId, { ok: true, text: operation.lastAssistantText || '任务已完成。' })
-      else if (kind === 'aborted' || kind === 'interrupted') this.finish(sessionId, { ok: false, cancelled: true, error: '已取消' })
-      else this.finish(sessionId, { ok: false, error: `Harness 任务结束：${kind}` })
+      if (kind === 'completed') this.finish(sessionId, { ok: true, text: operation.lastAssistantText || 'Uppgiften är klar.' })
+      else if (kind === 'aborted' || kind === 'interrupted') this.finish(sessionId, { ok: false, cancelled: true, error: CANCELLED })
+      else this.finish(sessionId, { ok: false, error: `Harness-uppgiften avslutades: ${kind}` })
     }
   }
 
@@ -337,10 +341,10 @@ export class HarnessBridge {
     const reason = objectField(event.data, 'reason')
     const kind = typeof reason?.kind === 'string' ? reason.kind : typeof event.data?.reason === 'string' ? event.data.reason : 'completed'
     const result: DelegateResult = kind === 'completed'
-      ? { ok: true, text: observer.lastAssistantText || '任务已完成。' }
+      ? { ok: true, text: observer.lastAssistantText || 'Uppgiften är klar.' }
       : kind === 'aborted' || kind === 'interrupted'
-        ? { ok: false, cancelled: true, error: '已取消' }
-        : { ok: false, error: `Harness 任务结束：${kind}` }
+        ? { ok: false, cancelled: true, error: CANCELLED }
+        : { ok: false, error: `Harness-uppgiften avslutades: ${kind}` }
     observer.callbacks.onTurnEnd(turn, result)
     observer.activeTurn = undefined
     observer.openTurn = undefined
