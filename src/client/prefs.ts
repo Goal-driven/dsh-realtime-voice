@@ -1,3 +1,5 @@
+import { DEFAULT_FLOOR_DELAY_MS, MAX_FLOOR_DELAY_MS, MIN_FLOOR_DELAY_MS } from '../floor-policy.ts'
+
 export type VoiceProviderId = 'qwen' | 'openai'
 export type QwenRegion = 'cn-beijing' | 'ap-southeast-1'
 
@@ -46,7 +48,7 @@ const DEFAULTS: VoicePrefs = {
   voiceDraftDwellMs: 1800,
   voiceDraftAllowWithoutVoiceprint: false,
   voiceDraftSensitiveDeny: true,
-  floorDelayMs: 800,
+  floorDelayMs: DEFAULT_FLOOR_DELAY_MS,
   floorComposerEnabled: true,
   qwenFloorModel: 'qwen3.5-flash',
   openaiFloorModel: 'gpt-5-mini',
@@ -165,7 +167,7 @@ function sanitize(value: VoicePrefs): VoicePrefs {
     voiceDraftDwellMs: Math.max(qwenMergeMs, numberInRange(value.voiceDraftDwellMs, 500, 6000, DEFAULTS.voiceDraftDwellMs)),
     voiceDraftAllowWithoutVoiceprint: value.voiceDraftAllowWithoutVoiceprint === true,
     voiceDraftSensitiveDeny: value.voiceDraftSensitiveDeny !== false,
-    floorDelayMs: numberInRange(value.floorDelayMs, 400, 3000, DEFAULTS.floorDelayMs),
+    floorDelayMs: numberInRange(value.floorDelayMs, MIN_FLOOR_DELAY_MS, MAX_FLOOR_DELAY_MS, DEFAULTS.floorDelayMs),
     floorComposerEnabled: value.floorComposerEnabled !== false,
     qwenFloorModel: text(value.qwenFloorModel, 128) || DEFAULTS.qwenFloorModel,
     openaiFloorModel: text(value.openaiFloorModel, 128) || DEFAULTS.openaiFloorModel,

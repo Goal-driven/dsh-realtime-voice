@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { Readable } from 'node:stream'
 import test from 'node:test'
+import { MIN_FLOOR_DELAY_MS } from '../src/floor-policy.ts'
 import { apply, isHostDependencies, type HostDependencies } from '../src/index.ts'
 
 function request(body = {}, method = 'POST') {
@@ -129,6 +130,7 @@ test('draft auto-send preferences persist with safe bounds', async () => {
       voiceDraftDwellMs: 600,
       voiceDraftAllowWithoutVoiceprint: true,
       voiceDraftSensitiveDeny: true,
+      floorDelayMs: 800,
     }, 'PUT') as never,
     saved.value as never,
   )
@@ -137,6 +139,7 @@ test('draft auto-send preferences persist with safe bounds', async () => {
   assert.equal(fx.storedPrefs().voiceDraftDwellMs, 1400)
   assert.equal(fx.storedPrefs().voiceDraftAllowWithoutVoiceprint, true)
   assert.equal(fx.storedPrefs().voiceDraftSensitiveDeny, true)
+  assert.equal(fx.storedPrefs().floorDelayMs, MIN_FLOOR_DELAY_MS)
 })
 
 test('dynamic floor route cleans input and returns only validated model speech', async () => {

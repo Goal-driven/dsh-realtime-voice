@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
+import { MAX_FLOOR_DELAY_MS, MIN_FLOOR_DELAY_MS } from '../floor-policy.ts'
 import type { VoiceController } from './controller.ts'
 import { loadPrefs, subscribePrefs, updatePrefs } from './prefs.ts'
 import { deleteVoiceprint, getVoiceprintStatus, type VoiceprintStatus } from './voiceprint.ts'
@@ -130,7 +131,7 @@ export function SettingsCard() {
         <Field label="Modell"><select style={styles.input} value={prefs.openaiModel} disabled><option value="gpt-realtime-2.1-mini">GPT-Realtime 2.1 Mini</option></select></Field>
         <Field label="Röst"><input style={styles.input} value={prefs.openaiVoice} onChange={e => updatePrefs({ openaiVoice: e.currentTarget.value })} /></Field>
       </>}
-      <Field label="Väntan före tal (ms)"><input style={styles.input} type="number" min={400} max={3000} step={100} value={prefs.floorDelayMs} onChange={e => updatePrefs({ floorDelayMs: e.currentTarget.valueAsNumber })} /></Field>
+      <Field label="Väntan före väntesignal (ms)"><input style={styles.input} type="number" min={MIN_FLOOR_DELAY_MS} max={MAX_FLOOR_DELAY_MS} step={500} value={prefs.floorDelayMs} onChange={e => updatePrefs({ floorDelayMs: e.currentTarget.valueAsNumber })} /></Field>
       <Field label="Dynamisk väntfras"><input type="checkbox" checked={prefs.floorComposerEnabled} onChange={e => updatePrefs({ floorComposerEnabled: e.currentTarget.checked })} /></Field>
       {prefs.floorComposerEnabled && <Field label="Modell för väntfras"><input style={styles.input} value={prefs.provider === 'qwen' ? prefs.qwenFloorModel : prefs.openaiFloorModel} onChange={e => prefs.provider === 'qwen' ? updatePrefs({ qwenFloorModel: e.currentTarget.value }) : updatePrefs({ openaiFloorModel: e.currentTarget.value })} /></Field>}
       <Field label="Talstil"><textarea style={{ ...styles.input, minHeight: 84, resize: 'vertical' }} value={prefs.instructions} onChange={e => updatePrefs({ instructions: e.currentTarget.value })} /></Field>
