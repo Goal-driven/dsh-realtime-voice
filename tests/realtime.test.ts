@@ -17,6 +17,62 @@ test('the assistant voice cannot return as a new Swedish Harness task', () => {
   assert.equal(guard.shouldSuppress(answer, 4_000), false)
 })
 
+test('OpenAI sends exact Swedish transcripts to Harness and preserves busy-turn provenance', async () => {
+  const transcripts: Array<{ text: string; busy?: boolean }> = []
+  let delegatedToolCalls = 0
+  const states: Array<{ state: string; detail?: string }> = []
+  const connection = new RealtimeConnection(prefs(), {
+    onState(state, detail) { states.push({ state, detail }) },
+    async onToolCall() { delegatedToolCalls++; return {} },
+    async onTranscript(text, meta) { transcripts.push({ text, busy: meta?.capturedWhileBusy }) },
+  })
+  const internals = connection as unknown as { handleEvent(raw: unknown): Promise<void> }
+
+  await internals.handleEvent(JSON.stringify({ type: 'input_audio_buffer.speech_started', item_id: 'idle-1' }))
+  await internals.handleEvent(JSON.stringify({ type: 'input_audio_buffer.speech_stopped', item_id: 'idle-1' }))
+  await internals.handleEvent(JSON.stringify({
+    type: 'conversation.item.input_audio_transcription.completed',
+    item_id: 'idle-1',
+    transcript: 'Test ett två tre.',
+  }))
+
+  connection.setInputPhase('harness')
+  await internals.handleEvent(JSON.stringify({ type: 'input_audio_buffer.speech_started', item_id: 'busy-1' }))
+  await internals.handleEvent(JSON.stringify({
+    type: 'conversation.item.input_audio_transcription.completed',
+    item_id: 'busy-1',
+    transcript: 'Och fortsätt med nästa sak.',
+  }))
+
+  assert.deepEqual(transcripts, [
+    { text: 'Test ett två tre.', busy: false },
+    { text: 'Och fortsätt med nästa sak.', busy: true },
+  ])
+  assert.equal(delegatedToolCalls, 0)
+  assert.equal(states.some(value => value.detail === 'Tal upptäckt'), true)
+  assert.equal(states.some(value => value.detail === 'Bearbetar svenskt tal'), true)
+})
+
+test('OpenAI reports transcription failures instead of listening forever', async () => {
+  const states: Array<{ state: string; detail?: string }> = []
+  const connection = new RealtimeConnection(prefs(), {
+    onState(state, detail) { states.push({ state, detail }) },
+    async onToolCall() {},
+  })
+  const internals = connection as unknown as { handleEvent(raw: unknown): Promise<void> }
+
+  await internals.handleEvent(JSON.stringify({
+    type: 'conversation.item.input_audio_transcription.failed',
+    item_id: 'failed-1',
+    error: { message: 'transcription unavailable' },
+  }))
+
+  assert.deepEqual(states.at(-1), {
+    state: 'error',
+    detail: 'Svensk taligenkänning misslyckades: transcription unavailable',
+  })
+})
+
 test('out-of-band OpenAI speech reads streamed Harness text without polluting the conversation', async () => {
   const sent: Array<Record<string, unknown>> = []
   const connection = new RealtimeConnection(prefs(), { onState() {}, async onToolCall() {} })

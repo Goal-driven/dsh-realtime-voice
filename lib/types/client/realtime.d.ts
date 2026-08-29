@@ -1,6 +1,7 @@
 import type { VoicePrefs } from './prefs.ts';
 import { type ToolCall } from './protocol.ts';
 import { type VoiceTelemetrySnapshot } from './telemetry.ts';
+import type { TurnPhase } from './turn-coordinator.ts';
 export interface TranscriptMeta {
     capturedWhileBusy?: boolean;
     voiceprint?: 'approved' | 'rejected' | 'unavailable';
@@ -32,12 +33,15 @@ export declare class RealtimeConnection {
     private readonly speechWaiters;
     private readonly speechIdleWaiters;
     private readonly cancelledSpeech;
+    private readonly utteranceBusy;
     private speechMuteHolds;
+    private inputPhase;
     private readonly telemetry;
     constructor(prefs: VoicePrefs, callbacks: RealtimeCallbacks);
     connect(): Promise<void>;
     speak(text: string): Promise<void>;
     waitForSpeechIdle(): Promise<void>;
+    setInputPhase(phase: TurnPhase): void;
     cancelSpeech(): void;
     disconnect(): void;
     private handleEvent;

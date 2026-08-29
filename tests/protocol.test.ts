@@ -30,23 +30,46 @@ const base: VoicePrefs = {
   instructions: 'test',
 }
 
-test('OpenAI and Qwen expose only the mandatory Harness delegate', () => {
-  const openai = sessionUpdate(base) as { session: { tools: Array<{ name: string }> } }
+test('Qwen keeps the mandatory Harness delegate while OpenAI bypasses generated tool calls', () => {
+  const openai = sessionUpdate(base) as { session: Record<string, unknown> }
   const qwen = sessionUpdate({ ...base, provider: 'qwen' }) as { session: { tools: Array<{ function: { name: string } }> } }
-  assert.deepEqual(openai.session.tools.map(tool => tool.name), ['delegate_to_harness'])
+  assert.equal('tools' in openai.session, false)
+  assert.equal('tool_choice' in openai.session, false)
   assert.deepEqual(qwen.session.tools.map(tool => tool.function.name), ['delegate_to_harness'])
 })
 
-test('OpenAI forces the only Harness tool instead of relying on model choice', () => {
-  const openai = sessionUpdate(base) as { session: { tool_choice: string; audio: { input: { turn_detection: { eagerness: string } } } } }
-  assert.equal(openai.session.tool_choice, 'required')
-  assert.equal(openai.session.audio.input.turn_detection.eagerness, 'high')
+test('OpenAI transcribes Swedish laptop speech and leaves response creation to Harness', () => {
+  const openai = sessionUpdate(base) as {
+    session: {
+      audio: {
+        input: {
+          noise_reduction: unknown
+          transcription: { model: string; language: string; prompt: string }
+          turn_detection: Record<string, unknown>
+        }
+      }
+    }
+  }
+  assert.deepEqual(openai.session.audio.input.noise_reduction, { type: 'far_field' })
+  assert.deepEqual(openai.session.audio.input.transcription, {
+    model: 'gpt-4o-mini-transcribe',
+    language: 'sv',
+    prompt: 'Svenskt samtal. Bevara namn, produktnamn och tekniska termer ordagrant.',
+  })
+  assert.deepEqual(openai.session.audio.input.turn_detection, {
+    type: 'server_vad',
+    threshold: 0.35,
+    prefix_padding_ms: 400,
+    silence_duration_ms: 700,
+    create_response: false,
+    interrupt_response: false,
+  })
 })
 
-test('both providers receive the Harness-first policy', () => {
+test('Qwen receives the Harness-first policy while OpenAI keeps only speaking guidance', () => {
   const openai = sessionUpdate(base) as { session: { instructions: string; truncation: unknown } }
   const qwen = sessionUpdate({ ...base, provider: 'qwen' }) as { session: { instructions: string; input_audio_transcription: { model: string; language: string } } }
-  assert.match(openai.session.instructions, /varje giltigt yttrande/i)
+  assert.equal(openai.session.instructions, 'test')
   assert.match(qwen.session.instructions, /delegate_to_harness/)
   assert.deepEqual(openai.session.truncation, {
     type: 'retention_ratio',

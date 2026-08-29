@@ -1,6 +1,7 @@
 import type { VoicePrefs } from './prefs.ts'
 import { parseToolCall, sessionUpdate, toolOutput, type ToolCall } from './protocol.ts'
 import { VoiceTelemetryTracker, type VoiceTelemetrySnapshot } from './telemetry.ts'
+import type { TurnPhase } from './turn-coordinator.ts'
 
 export interface TranscriptMeta {
   capturedWhileBusy?: boolean
@@ -33,7 +34,9 @@ export class RealtimeConnection {
   private readonly speechWaiters = new Map<string, { resolve(): void; reject(error: Error): void; responseId?: string; timeout: ReturnType<typeof setTimeout>; speech: string }>()
   private readonly speechIdleWaiters = new Set<() => void>()
   private readonly cancelledSpeech = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly utteranceBusy = new Map<string, boolean>()
   private speechMuteHolds = 0
+  private inputPhase: TurnPhase = 'listening'
   private readonly telemetry: VoiceTelemetryTracker
 
   constructor(private readonly prefs: VoicePrefs, private readonly callbacks: RealtimeCallbacks) {
@@ -174,6 +177,10 @@ export class RealtimeConnection {
     await new Promise<void>(resolve => { this.speechIdleWaiters.add(resolve) })
   }
 
+  setInputPhase(phase: TurnPhase): void {
+    this.inputPhase = phase
+  }
+
   cancelSpeech(): void {
     for (const [requestId, waiter] of this.speechWaiters) {
       if (waiter.responseId !== undefined) this.send({ type: 'response.cancel', response_id: waiter.responseId })
@@ -207,6 +214,8 @@ export class RealtimeConnection {
     this.updateSent = false
     this.responseActive = false
     this.speechMuteHolds = 0
+    this.inputPhase = 'listening'
+    this.utteranceBusy.clear()
     for (const timeout of this.cancelledSpeech.values()) clearTimeout(timeout)
     this.cancelledSpeech.clear()
     this.rejectSpeech(new Error('Röstanslutningen stängdes'))
@@ -226,14 +235,44 @@ export class RealtimeConnection {
       if (this.audioSender !== undefined && this.microphoneTrack !== undefined) {
         if (this.speechMuteHolds === 0 && this.speechWaiters.size === 0) await this.audioSender.replaceTrack(this.microphoneTrack)
       }
-      this.callbacks.onState('listening')
+      this.callbacks.onState('listening', 'Lyssnar efter svenska')
     }
     if (type === 'input_audio_buffer.speech_started') {
+      const itemId = eventString(event, 'item_id')
+      if (itemId !== undefined) this.utteranceBusy.set(itemId, isBusyPhase(this.inputPhase))
       this.callbacks.onSpeechStart?.()
       if (this.responseActive) this.send({ type: 'response.cancel' })
-      this.callbacks.onState('listening')
+      this.callbacks.onState('listening', 'Tal upptäckt')
     }
-    if (type === 'input_audio_buffer.speech_stopped') this.callbacks.onSpeechEnd?.()
+    if (type === 'input_audio_buffer.speech_stopped') {
+      this.callbacks.onSpeechEnd?.()
+      this.callbacks.onState('listening', 'Bearbetar svenskt tal')
+    }
+    if (type === 'conversation.item.input_audio_transcription.completed') {
+      const transcript = eventString(event, 'transcript')?.trim() ?? ''
+      const itemId = eventString(event, 'item_id')
+      const capturedWhileBusy = itemId === undefined
+        ? isBusyPhase(this.inputPhase)
+        : this.utteranceBusy.get(itemId) ?? isBusyPhase(this.inputPhase)
+      if (itemId !== undefined) this.utteranceBusy.delete(itemId)
+      if (transcript === '') return
+      if (this.echoGuard.shouldSuppress(transcript)) {
+        this.callbacks.onState('listening', 'Själveko ignorerat')
+        return
+      }
+      await this.callbacks.onTranscript?.(transcript, { capturedWhileBusy })
+      return
+    }
+    if (type === 'conversation.item.input_audio_transcription.failed') {
+      const itemId = eventString(event, 'item_id')
+      if (itemId !== undefined) this.utteranceBusy.delete(itemId)
+      const error = eventRecord(event, 'error')
+      const message = typeof error.message === 'string' && error.message.trim() !== ''
+        ? error.message.trim()
+        : 'okänt fel'
+      this.callbacks.onState('error', `Svensk taligenkänning misslyckades: ${message}`)
+      return
+    }
     if (type === 'response.created' && !this.captureSpeechResponse(event)) this.responseActive = true
     if (type === 'response.audio.delta' || type === 'response.output_audio.delta' || type === 'response.audio_transcript.delta') this.callbacks.onState('speaking')
     if (type === 'response.done' && this.settleSpeechResponse(event)) return
@@ -372,6 +411,16 @@ function eventRecord(value: unknown, key: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null) return {}
   const nested = (value as Record<string, unknown>)[key]
   return typeof nested === 'object' && nested !== null ? nested as Record<string, unknown> : {}
+}
+
+function eventString(value: unknown, key: string): string | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const nested = (value as Record<string, unknown>)[key]
+  return typeof nested === 'string' ? nested : undefined
+}
+
+function isBusyPhase(phase: TurnPhase): boolean {
+  return phase !== 'listening' && phase !== 'endpoint-candidate'
 }
 
 const ECHO_WINDOW_MS = 2_000

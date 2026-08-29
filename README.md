@@ -2,9 +2,9 @@
 
 ## ValueHub-konfiguration (sv-SE)
 
-ValueHub-versionen använder OpenAI `gpt-realtime-2.1-mini` som standard med naturlig svenska (`sv-SE`) och rösten `marin`. Modellen är låst på både klient och Host. Varje giltigt yttrande delegeras fortfarande till Harness; röstmodellen får inte svara eller köra andra verktyg själv.
+ValueHub-versionen använder OpenAI `gpt-realtime-2.1-mini` som standard med naturlig svenska (`sv-SE`) och rösten `marin`. Modellen är låst på både klient och Host. `gpt-4o-mini-transcribe` återger talet ordagrant på svenska och skickar transkriptet till Harness; röstmodellen får inte formulera uppgiften, svara eller köra andra verktyg själv.
 
-OpenAI-linjen använder snabb semantisk VAD och börjar läsa den första färdiga svarssatsen medan Harness fortfarande producerar resten. Vid långsamma svar ges en kort svensk arbetsindikering. Mikrofonspåret kopplas bort under uppläsning och ett separat likhetsfilter stoppar högtalareko från att återvända som en ny Harness-uppgift.
+OpenAI-linjen använder server-VAD med far-field-brusreducering för laptopmikrofoner och börjar läsa den första färdiga svarssatsen medan Harness fortfarande producerar resten. Vid långsamma svar ges en kort svensk arbetsindikering. Mikrofonspåret kopplas bort under uppläsning och ett separat likhetsfilter stoppar högtalareko från att återvända som en ny Harness-uppgift.
 
 Pluginen publicerar följande telemetri till GenUI Canvas efter varje svar:
 
@@ -44,7 +44,7 @@ DeepSeek Harness 的轻量实时语音插件。不包含 Docker、Python或本�
 推荐直接从带版本标签的 GitHub 仓库安装：
 
 ```bash
-dsh plugin --profile web add github:zfu691531-hash/dsh-realtime-voice#v0.12.3
+dsh plugin --profile web add github:zfu691531-hash/dsh-realtime-voice#v0.12.4
 ```
 
 仓库提交预构建 `lib/`，因此这条命令不需要本机 TypeScript、源码 checkout 或 pnpm `allowBuilds`。重启 DeepSeek Harness 后，在“设置 → 插件”展开“实时语音（千问 / GPT）”。
@@ -52,7 +52,7 @@ dsh plugin --profile web add github:zfu691531-hash/dsh-realtime-voice#v0.12.3
 也可以下载同版本 GitHub Release 中的预构建 tarball 后执行：
 
 ```bash
-dsh plugin --profile web add ./dsh-realtime-voice-0.12.3.tgz
+dsh plugin --profile web add ./dsh-realtime-voice-0.12.4.tgz
 ```
 
 也可以从源码自行验收并打包：
